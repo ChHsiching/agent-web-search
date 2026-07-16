@@ -1,16 +1,23 @@
-//! Search data-transformation layer: query building, result parsing, and
-//! per-result URL derivation.
+//! Search data-transformation + orchestration layer.
 //!
-//! These are pure functions — no network, no I/O — so they are fully testable
-//! without any HTTP seam. The orchestration ticket composes these with the
-//! fanout and extract modules to form a complete search call.
+//! Two halves:
+//! - **Pure transformations** (query building, result parsing, URL derivation):
+//!   no network, fully testable without any HTTP seam.
+//! - **Orchestration** (`orchestrate`): composes the pure functions with
+//!   fanout (fetch raw results) and extract (page-body for top N), producing
+//!   the final output list.
 //!
 //! Vocabulary note (CONTEXT.md): a **Snippet** is the short description the
 //! search Source returns in `content`; an **Extract** is the page-body text we
-//! fetch separately. This module deals in Snippets only — Extract is applied
-//! downstream by the orchestration layer.
+//! fetch separately. The pure functions deal in Snippets only; `orchestrate`
+//! applies Extracts to the top results.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use crate::config;
+use crate::extract;
+use crate::fanout::Fanout;
+use crate::sources::Fetch;
 
 /// A raw result parsed from a SearXNG JSON response, before Extract is applied.
 /// Only the fields we care about are captured; the rest are ignored.
@@ -234,6 +241,116 @@ fn urlencoding(s: &str) -> String {
     out
 }
 
+// ===========================================================================
+// Orchestration
+// ===========================================================================
+
+/// A final output result, schema-matching the target tool's per-result shape.
+/// The MCP layer maps this to its JSON response (ADR-0005).
+#[derive(Debug, Serialize, PartialEq)]
+pub struct OutputResult {
+    pub title: String,
+    pub url: String,
+    /// The summary: a page-body Extract for top-N results, or the source
+    /// Snippet for the rest. Never a generated summary.
+    pub summary: String,
+    pub site_name: String,
+    pub favicon: String,
+}
+
+/// The outcome of an orchestrated search.
+pub enum SearchOutcome {
+    /// Results were obtained.
+    Ok(Vec<OutputResult>),
+    /// No source could answer (every instance exhausted). A query-level
+    /// failure, distinct from a connection failure.
+    NoSource,
+}
+
+/// Run a complete search: build the query, fan it out across instances, parse
+/// the winning JSON, apply page-body Extract to the top N results, and derive
+/// site_name/favicon for each. Composes the fanout, parse, and extract modules.
+///
+/// `content_size` controls the Extract word limit (medium ≈ 500, high ≈ 2500).
+/// Only the top `EXTRACT_TOP_N` results get an Extract; the rest carry the
+/// source Snippet. If a top-N page fetch fails, that result degrades to its
+/// Snippet without failing the whole search.
+pub async fn orchestrate(
+    request: &SearchRequest,
+    content_size: &Option<String>,
+    fanout: &Fanout,
+    fetcher: &dyn Fetch,
+) -> SearchOutcome {
+    let query = build_searxng_query(request);
+    let word_limit = config::word_limit_for(content_size);
+
+    let body = match fanout.search(fetcher, &query).await {
+        crate::fanout::FanoutResult::Success { body, .. } => body,
+        crate::fanout::FanoutResult::Exhausted => return SearchOutcome::NoSource,
+    };
+
+    let raw = parse_results(&body);
+    let results = assemble_results(raw, word_limit, fetcher).await;
+    SearchOutcome::Ok(results)
+}
+
+/// Assemble final output results from raw results: apply Extract to the top N,
+/// derive site_name/favicon for all, and fill in Snippets for the rest.
+///
+/// The top-N page fetches run concurrently. A fetch or extraction failure
+/// degrades that single result to its Snippet without affecting the others.
+async fn assemble_results(
+    raw: Vec<RawResult>,
+    word_limit: usize,
+    fetcher: &dyn Fetch,
+) -> Vec<OutputResult> {
+    use futures::future::join_all;
+
+    let total = raw.len();
+    let results_iter = raw
+        .into_iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            let needs_extract = idx < config::EXTRACT_TOP_N;
+            async move {
+                let summary = if needs_extract {
+                    fetch_and_extract(fetcher, &r.url, word_limit)
+                        .await
+                        .unwrap_or(r.snippet.clone())
+                } else {
+                    r.snippet.clone()
+                };
+                OutputResult {
+                    title: r.title,
+                    url: r.url.clone(),
+                    summary,
+                    site_name: derive_site_name(&r.url),
+                    favicon: derive_favicon(&r.url),
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let _ = total;
+    join_all(results_iter).await
+}
+
+/// Fetch a page and run the extractor on its HTML. Returns None on any failure
+/// (fetch error, extraction failure) so the caller can degrade to the Snippet.
+async fn fetch_and_extract(
+    fetcher: &dyn Fetch,
+    url: &str,
+    word_limit: usize,
+) -> Option<String> {
+    let html = fetcher.get(url).await.ok()?;
+    let text = extract::extract(&html, word_limit);
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,5 +499,142 @@ mod tests {
         assert_eq!(urlencoding("rust async"), "rust+async");
         assert_eq!(urlencoding("a&b=c"), "a%26b%3Dc");
         assert_eq!(urlencoding("plain123-_.~"), "plain123-_.~");
+    }
+
+    // ----- Orchestration tests -----
+
+    use crate::fanout::Fanout;
+    use crate::sources::Instance;
+    use std::sync::Mutex;
+
+    struct OrchestrationFetcher {
+        /// Responses: substring-match -> body. The search endpoint and each
+        /// page URL get their own canned response.
+        responses: Mutex<Vec<(String, String)>>,
+    }
+
+    impl OrchestrationFetcher {
+        fn new() -> Self {
+            Self {
+                responses: Mutex::new(Vec::new()),
+            }
+        }
+        fn on(&self, sub: &str, body: &str) {
+            self.responses
+                .lock()
+                .unwrap()
+                .push((sub.to_string(), body.to_string()));
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Fetch for OrchestrationFetcher {
+        async fn get(&self, url: &str) -> anyhow::Result<String> {
+            let responses = self.responses.lock().unwrap();
+            for (sub, body) in responses.iter() {
+                if url.contains(sub) {
+                    return Ok(body.clone());
+                }
+            }
+            anyhow::bail!("no canned response for {url}")
+        }
+    }
+
+    fn req_query(q: &str) -> SearchRequest {
+        SearchRequest {
+            query: q.to_string(),
+            domain_filter: None,
+            recency_filter: Recency::NoLimit,
+            location: Locale::Us,
+        }
+    }
+
+    #[tokio::test]
+    async fn orchestrate_returns_assembled_results() {
+        let fake = OrchestrationFetcher::new();
+        // The search endpoint returns 3 results.
+        fake.on(
+            "format=json",
+            r#"{"results":[
+                {"title":"First","url":"https://first.example/a","content":"snippet one"},
+                {"title":"Second","url":"https://second.example/b","content":"snippet two"},
+                {"title":"Third","url":"https://third.example/c","content":"snippet three"}
+            ]}"#,
+        );
+        // Page bodies for the top 3 (the extractor will pull article text).
+        fake.on(
+            "first.example",
+            "<html><body><article><p>The real content of the first page here.</p></article></body></html>",
+        );
+        fake.on(
+            "second.example",
+            "<html><body><article><p>Second page article body text.</p></article></body></html>",
+        );
+        fake.on(
+            "third.example",
+            "<html><body><article><p>Third page content body.</p></article></body></html>",
+        );
+
+        let fanout = Fanout::new(vec![Instance {
+            base_url: "https://searx.example/".into(),
+            latency_median: 0.1,
+        }]);
+
+        let outcome = orchestrate(&req_query("test"), &None, &fanout, &fake).await;
+        match outcome {
+            SearchOutcome::Ok(results) => {
+                assert_eq!(results.len(), 3, "all three results returned");
+                // Top 3 get an Extract (may or may not extract text from these
+                // minimal fixtures, but the field is present and non-error).
+                assert_eq!(results[0].title, "First");
+                assert_eq!(results[0].site_name, "first.example");
+                assert_eq!(results[0].favicon, "https://first.example/favicon.ico");
+            }
+            SearchOutcome::NoSource => panic!("expected results, got NoSource"),
+        }
+    }
+
+    #[tokio::test]
+    async fn orchestrate_returns_no_source_when_exhausted() {
+        // No canned search response -> fanout exhausts -> NoSource.
+        let fake = OrchestrationFetcher::new();
+        let fanout = Fanout::new(vec![Instance {
+            base_url: "https://down.example/".into(),
+            latency_median: 0.1,
+        }]);
+        let outcome = orchestrate(&req_query("x"), &None, &fanout, &fake).await;
+        assert!(matches!(outcome, SearchOutcome::NoSource));
+    }
+
+    #[tokio::test]
+    async fn orchestrate_degrades_to_snippet_when_page_fetch_fails() {
+        let fake = OrchestrationFetcher::new();
+        // Search returns a result, but its page URL has no canned HTML.
+        fake.on(
+            "format=json",
+            r#"{"results":[
+                {"title":"Only","url":"https://unfetchable.example/x","content":"the snippet text"}
+            ]}"#,
+        );
+        let fanout = Fanout::new(vec![Instance {
+            base_url: "https://searx.example/".into(),
+            latency_median: 0.1,
+        }]);
+        let outcome = orchestrate(&req_query("x"), &None, &fanout, &fake).await;
+        match outcome {
+            SearchOutcome::Ok(results) => {
+                // Page fetch failed, so summary falls back to the snippet.
+                assert_eq!(results[0].summary, "the snippet text");
+            }
+            SearchOutcome::NoSource => panic!("expected a degraded result"),
+        }
+    }
+
+    #[test]
+    fn content_size_word_limits() {
+        assert_eq!(config::word_limit_for(&None), 500);
+        assert_eq!(config::word_limit_for(&Some("medium".into())), 500);
+        assert_eq!(config::word_limit_for(&Some("high".into())), 2500);
+        assert_eq!(config::word_limit_for(&Some("garbage".into())), 500);
     }
 }
