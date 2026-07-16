@@ -1,0 +1,102 @@
+name: release
+
+# Cross-compiles pre-compiled binaries for 5 platforms on a version tag and
+# publishes them as GitHub Release assets. The primary install path — users
+# download one file and run it, no toolchain needed.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: # allow manual runs for testing the pipeline
+
+permissions:
+  contents: write # needed to create the release and upload assets
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            bin_ext: .exe
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            bin_ext: ""
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            bin_ext: ""
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+            bin_ext: ""
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+            bin_ext: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # The aarch64-linux target cross-compiles from x64; install the cross
+      # linker toolchain so linking succeeds.
+      - name: Install aarch64-linux cross toolchain
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../agent-web-search-${{ matrix.target }}.zip agent-web-search${{ matrix.bin_ext }}
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../agent-web-search-${{ matrix.target }}.tar.gz agent-web-search${{ matrix.bin_ext }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-web-search-${{ matrix.target }}
+          path: agent-web-search-${{ matrix.target }}.${{ matrix.archive }}
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true

@@ -187,6 +187,7 @@ impl Fanout {
     }
 
     /// The current failure count for an instance (for testing/inspection).
+    #[allow(dead_code)]
     pub fn failure_count(&self, base_url: &str) -> u32 {
         self.inner
             .health

@@ -52,7 +52,10 @@ impl ReqwestFetcher {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
-            .user_agent("agent-web-search/0.1 (+https://github.com/ChHsiching/agent-web-search)")
+            // Many SearXNG instances block non-browser UAs; use a browser-like
+            // UA with the tool identity appended, so we pass bot filters while
+            // still being identifiable.
+            .user_agent("Mozilla/5.0 (compatible; agent-web-search/0.1; +https://github.com/ChHsiching/agent-web-search)")
             .build()
             .expect("failed to build reqwest client");
         Self { client }
