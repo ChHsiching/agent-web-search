@@ -1,13 +1,17 @@
-//! Integration test for the MCP stdio server shell (ticket #2).
+//! Integration test for the MCP stdio server.
 //!
 //! Verifies the ADR-0004 stability disciplines end-to-end against the real
 //! binary:
-//! - the server responds to `initialize`, `tools/list`, and `tools/call`.
+//! - the server responds to `initialize` and `tools/list`.
 //! - stdout contains ONLY valid JSON-RPC frames (no stray log pollution).
-//! - no network call blocks the handshake (it would show up as a stall).
+//! - `tools/call` returns a JSON-shaped response (results array or error
+//!   object) without crashing. This call hits the network, so we assert only
+//!   on response shape, not on whether live results came back (instances may
+//!   be rate-limited or offline).
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 /// Spawn the built binary as a stdio MCP server.
 fn spawn_server() -> std::process::Child {
@@ -20,22 +24,26 @@ fn spawn_server() -> std::process::Child {
         .expect("failed to spawn server")
 }
 
-/// Read one JSON-RPC response line from stdout. Each MCP message over stdio
-/// is a single line of JSON (newline-delimited).
+/// Read one JSON-RPC response line from stdout.
 fn read_response(reader: &mut BufReader<std::process::ChildStdout>) -> serde_json::Value {
     let mut line = String::new();
     reader
         .read_line(&mut line)
         .expect("expected a JSON-RPC line on stdout");
-    // Skip any blank lines.
     while line.trim().is_empty() {
         line.clear();
         reader.read_line(&mut line).expect("expected another line");
     }
     serde_json::from_str(&line).unwrap_or_else(|e| {
-        panic!("stdout line is not valid JSON-RPC (stdout pollution?):\n  line: {line:?}\n  error: {e}")
+        panic!(
+            "stdout line is not valid JSON-RPC (stdout pollution?):\n  line: {line:?}\n  error: {e}"
+        )
     })
 }
+
+const INIT: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}"#;
+const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+const TOOLS_LIST: &str = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#;
 
 #[test]
 fn initialize_handshake_responds() {
@@ -43,16 +51,16 @@ fn initialize_handshake_responds() {
     let mut stdin = child.stdin.take().expect("no stdin");
     let mut stdout = BufReader::new(child.stdout.take().expect("no stdout"));
 
-    // Send initialize — this is the handshake that must never block on network.
-    let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}"#;
-    writeln!(stdin, "{init}").unwrap();
+    writeln!(stdin, "{INIT}").unwrap();
     stdin.flush().unwrap();
 
     let resp = read_response(&mut stdout);
     assert_eq!(resp["jsonrpc"], "2.0");
     assert_eq!(resp["id"], 1);
     assert!(
-        resp["result"]["serverInfo"]["name"].as_str().unwrap()
+        resp["result"]["serverInfo"]["name"]
+            .as_str()
+            .unwrap()
             .contains("agent-web-search"),
         "server name in initialize response: {resp}"
     );
@@ -61,10 +69,7 @@ fn initialize_handshake_responds() {
         "tools capability advertised: {resp}"
     );
 
-    // Send the initialized notification (no response expected), then list tools.
-    let initialized =
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
-    writeln!(stdin, "{initialized}").unwrap();
+    writeln!(stdin, "{INITIALIZED}").unwrap();
     stdin.flush().unwrap();
 
     child.kill().ok();
@@ -77,22 +82,14 @@ fn tools_list_advertises_web_search_prime() {
     let mut stdin = child.stdin.take().expect("no stdin");
     let mut stdout = BufReader::new(child.stdout.take().expect("no stdout"));
 
-    // initialize first
-    let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}"#;
-    writeln!(stdin, "{init}").unwrap();
+    writeln!(stdin, "{INIT}").unwrap();
     stdin.flush().unwrap();
     let _ = read_response(&mut stdout);
 
-    writeln!(
-        stdin,
-        r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#
-    )
-    .unwrap();
+    writeln!(stdin, "{INITIALIZED}").unwrap();
     stdin.flush().unwrap();
 
-    // tools/list
-    let list = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#;
-    writeln!(stdin, "{list}").unwrap();
+    writeln!(stdin, "{TOOLS_LIST}").unwrap();
     stdin.flush().unwrap();
 
     let resp = read_response(&mut stdout);
@@ -104,7 +101,6 @@ fn tools_list_advertises_web_search_prime() {
     let tool = &tools[0];
     assert_eq!(tool["name"], "web_search_prime");
 
-    // The five-parameter schema must match the target tool.
     let props = &tool["inputSchema"]["properties"];
     assert!(props["search_query"]["type"] == "string");
     for opt in [
@@ -122,37 +118,7 @@ fn tools_list_advertises_web_search_prime() {
         .as_array()
         .expect("required is an array");
     assert_eq!(required.len(), 1);
-    assert_eq!(required[0], "search_query", "only search_query is required");
-
-    child.kill().ok();
-    child.wait().ok();
-}
-
-#[test]
-fn tools_call_returns_stub_without_error() {
-    let mut child = spawn_server();
-    let mut stdin = child.stdin.take().expect("no stdin");
-    let mut stdout = BufReader::new(child.stdout.take().expect("no stdout"));
-
-    let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}"#;
-    writeln!(stdin, "{init}").unwrap();
-    stdin.flush().unwrap();
-    let _ = read_response(&mut stdout);
-    writeln!(
-        stdin,
-        r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#
-    )
-    .unwrap();
-    stdin.flush().unwrap();
-
-    let call = r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"web_search_prime","arguments":{"search_query":"rust async"}}}"#;
-    writeln!(stdin, "{call}").unwrap();
-    stdin.flush().unwrap();
-
-    let resp = read_response(&mut stdout);
-    assert_eq!(resp["id"], 3);
-    // The stub returns "[]" as the tool content; the key point is no error.
-    assert!(resp.get("error").is_none(), "no error on stub call: {resp}");
+    assert_eq!(required[0], "search_query");
 
     child.kill().ok();
     child.wait().ok();
@@ -160,47 +126,79 @@ fn tools_call_returns_stub_without_error() {
 
 #[test]
 fn stdout_is_clean_json_rpc_only() {
-    // The ADR-0004 discipline: nothing but JSON-RPC on stdout.
-    // We run a full sequence and assert every stdout line parses as JSON.
+    // The ADR-0004 discipline: nothing but JSON-RPC on stdout. We run
+    // initialize + tools/list (no tools/call, so no network dependency) and
+    // assert every stdout line parses as JSON.
     let mut child = spawn_server();
     let mut stdin = child.stdin.take().expect("no stdin");
     let mut stdout = BufReader::new(child.stdout.take().expect("no stdout"));
 
-    let seq = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}"#,
-        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"web_search_prime","arguments":{"search_query":"test"}}}"#,
-    ];
-
-    // Write all requests up front, then read responses. We expect 3 responses
-    // (initialize, tools/list, tools/call); the notification produces none.
-    for line in &seq {
+    for line in &[INIT, INITIALIZED, TOOLS_LIST] {
         writeln!(stdin, "{line}").unwrap();
     }
     stdin.flush().unwrap();
 
-    // Read everything stdout emits until the server is killed.
-    let mut raw = String::new();
-    // Give the server a moment to emit its responses.
-    stdin.flush().unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::thread::sleep(Duration::from_millis(150));
     child.kill().ok();
+    let mut raw = String::new();
     stdout.read_to_string(&mut raw).ok();
     child.wait().ok();
 
-    // Every non-blank line must be valid JSON.
     let mut parsed = 0;
     for line in raw.lines() {
         if line.trim().is_empty() {
             continue;
         }
-        serde_json::from_str::<serde_json::Value>(line)
-            .unwrap_or_else(|e| panic!("stdout pollution — line not JSON-RPC:\n  {line}\n  {e}"));
+        serde_json::from_str::<serde_json::Value>(line).unwrap_or_else(|e| {
+            panic!("stdout pollution — line not JSON-RPC:\n  {line}\n  {e}")
+        });
         parsed += 1;
     }
+    // initialize + tools/list produce 2 responses.
     assert!(
-        parsed >= 3,
-        "expected at least 3 JSON-RPC responses on stdout, got {parsed}; raw:\n{raw}"
+        parsed >= 2,
+        "expected at least 2 JSON-RPC responses on stdout, got {parsed}; raw:\n{raw}"
     );
+}
+
+#[test]
+fn tools_call_returns_json_shaped_response_without_crashing() {
+    // tools/call now runs the real search pipeline (network). We only assert
+    // the server doesn't crash and returns a well-formed JSON-RPC response
+    // whose content is valid JSON — either a results array or an error object.
+    // Live results aren't guaranteed (instances may rate-limit or be offline).
+    let mut child = spawn_server();
+    let mut stdin = child.stdin.take().expect("no stdin");
+    let mut stdout = BufReader::new(child.stdout.take().expect("no stdout"));
+
+    writeln!(stdin, "{INIT}").unwrap();
+    stdin.flush().unwrap();
+    let _ = read_response(&mut stdout);
+    writeln!(stdin, "{INITIALIZED}").unwrap();
+    stdin.flush().unwrap();
+
+    let call = r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"web_search_prime","arguments":{"search_query":"rust programming language","location":"us"}}}"#;
+    writeln!(stdin, "{call}").unwrap();
+    stdin.flush().unwrap();
+
+    let resp = read_response(&mut stdout);
+    assert_eq!(resp["id"], 3);
+    assert!(
+        resp.get("error").is_none(),
+        "no JSON-RPC level error on tools/call: {resp}"
+    );
+
+    // The tool result content should be valid JSON (results array or error obj).
+    let content = resp["result"]["content"][0]["text"]
+        .as_str()
+        .expect("tool result has text content");
+    let parsed: serde_json::Value =
+        serde_json::from_str(content).expect("tool content is valid JSON");
+    assert!(
+        parsed.is_array() || parsed.get("error").is_some(),
+        "content is a results array or an error object: {parsed}"
+    );
+
+    child.kill().ok();
+    child.wait().ok();
 }

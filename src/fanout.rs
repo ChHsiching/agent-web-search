@@ -37,8 +37,9 @@ pub struct Fanout {
 
 struct FanoutInner {
     /// Instances ranked by latency median (fastest first). The source of
-    /// truth from searx.space, set at refresh time.
-    base_ranking: Vec<Instance>,
+    /// truth from searx.space, set at refresh time. Updated via
+    /// `update_instances` when a background refresh completes.
+    base_ranking: std::sync::RwLock<Vec<Instance>>,
     /// Consecutive failure count per instance base_url. Higher = more demoted.
     health: std::sync::Mutex<HashMap<String, u32>>,
 }
@@ -56,10 +57,17 @@ impl Fanout {
     pub fn new(instances: Vec<Instance>) -> Self {
         Self {
             inner: Arc::new(FanoutInner {
-                base_ranking: instances,
+                base_ranking: std::sync::RwLock::new(instances),
                 health: std::sync::Mutex::new(HashMap::new()),
             }),
         }
+    }
+
+    /// Replace the instance ranking (e.g. after a background searx.space
+    /// refresh). Health scores are preserved so a refresh doesn't lose what
+    /// we learned about flaky instances.
+    pub fn update_instances(&self, instances: Vec<Instance>) {
+        *self.inner.base_ranking.write().unwrap() = instances;
     }
 
     /// The health-adjusted ordering of instances, used to pick batches.
@@ -69,7 +77,7 @@ impl Fanout {
     /// behind slower-but-reliable ones.
     fn ranked(&self) -> Vec<Instance> {
         let health = self.inner.health.lock().unwrap();
-        let mut ranked = self.inner.base_ranking.clone();
+        let mut ranked = self.inner.base_ranking.read().unwrap().clone();
         ranked.sort_by(|a, b| {
             let ha = *health.get(&a.base_url).unwrap_or(&0);
             let hb = *health.get(&b.base_url).unwrap_or(&0);
@@ -77,6 +85,11 @@ impl Fanout {
                 .then(a.latency_median.total_cmp(&b.latency_median))
         });
         ranked
+    }
+
+    /// Whether the pool currently has any instances.
+    pub fn is_empty(&self) -> bool {
+        self.inner.base_ranking.read().unwrap().is_empty()
     }
 
     /// Search across the instance pool.
