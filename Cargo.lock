@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "dirs",
+ "futures",
  "readabilityrs",
  "reqwest",
  "rmcp",
