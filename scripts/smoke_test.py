@@ -26,6 +26,11 @@ def main() -> int:
     if not os.path.exists(exe):
         print(f"FAIL: binary not found at {exe}", file=sys.stderr)
         return 1
+    # On Unix, a bare filename (no slash) is looked up in PATH by execvp, not
+    # the cwd — so a relative path that exists() still won't run. Prefix with
+    # ./ (or use the absolute path) so subprocess launches the actual file.
+    if sys.platform != "win32" and not os.path.dirname(exe):
+        exe = "./" + exe
 
     t0 = time.monotonic()
     proc = subprocess.Popen(
