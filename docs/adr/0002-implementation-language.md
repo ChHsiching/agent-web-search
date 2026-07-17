@@ -1,5 +1,7 @@
 # Implementation language: Rust
 
+> **Status: SUPERSEDED by ADR-0006.** The Rust implementation was built and tested (8 tickets, 45 tests green), but live verification found SearXNG public instances unusable (0/38), and no stable DDG backend exists for Rust. Implementation moved to Python + ddgs + PyInstaller. The Rust code remains as a design reference.
+
 The tool will be written in **Rust**, with **tokio** for async I/O and an existing Rust MCP SDK for the protocol layer (no hand-rolled stdio framing).
 
 ## Considered options
