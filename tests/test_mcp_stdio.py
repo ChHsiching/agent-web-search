@@ -82,7 +82,7 @@ def test_initialize_handshake_responds(server_env: dict[str, str]) -> None:
         proc.wait(timeout=5)
 
 
-def test_tools_list_advertises_web_search_prime(
+def test_tools_list_advertises_web_search(
     server_env: dict[str, str]
 ) -> None:
     proc = _spawn(server_env)
@@ -95,7 +95,7 @@ def test_tools_list_advertises_web_search_prime(
         tools = resp["result"]["tools"]
         assert len(tools) == 1, f"exactly one tool, got {len(tools)}"
         tool = tools[0]
-        assert tool["name"] == "web_search_prime"
+        assert tool["name"] == "web_search"
 
         props = tool["inputSchema"]["properties"]
         assert props["search_query"]["type"] == "string"
@@ -163,7 +163,7 @@ def test_tools_call_returns_json_shaped_response(
                 "id": 3,
                 "method": "tools/call",
                 "params": {
-                    "name": "web_search_prime",
+                    "name": "web_search",
                     "arguments": {
                         "search_query": "rust programming language",
                         "location": "us",

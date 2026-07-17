@@ -29,7 +29,7 @@ HIGH_WORDS: Final[int] = 2500
 
 
 def word_limit_for(content_size: str | None) -> int:
-    """Map the web_search_prime content_size string to a word limit.
+    """Map the web_search content_size string to a word limit.
 
     "high" -> HIGH_WORDS, anything else (including None) -> MEDIUM_WORDS,
     matching the target tool's default.

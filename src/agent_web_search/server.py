@@ -1,8 +1,8 @@
 """MCP server layer — the sole owner of stdout.
 
-Advertises the ``web_search_prime`` tool with a schema matching the target
-tool, so the result is a drop-in replacement. For now the handler returns a
-stub; the full search pipeline is wired up in a later ticket (#15).
+Advertises the ``web_search`` tool with a parameter schema matching the paid
+``web_search_prime`` tool, so the result is a drop-in replacement (same params,
+independent tool name).
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from . import __version__
 
 log = logging.getLogger(__name__)
 
-# The input schema for web_search_prime — matches the target tool 1:1 so the
-# tool is a drop-in replacement. All optional params default to None.
+# The input schema for web_search — matches the paid web_search_prime tool's
+# params 1:1 (independent tool name, same parameters = drop-in).
 _TOOL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -67,13 +67,12 @@ _TOOL_DESCRIPTION = (
 
 
 def create_server() -> Server:
-    """Build the MCP server with the web_search_prime tool registered."""
+    """Build the MCP server with the web_search tool registered."""
     server = Server(
         "agent-web-search",
         version=__version__,
         instructions=(
-            "A free, unlimited web-search tool. Call web_search_prime "
-            "with a query."
+            "A free, unlimited web-search tool. Call web_search with a query."
         ),
     )
 
@@ -81,7 +80,7 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         return [
             Tool(
-                name="web_search_prime",
+                name="web_search",
                 description=_TOOL_DESCRIPTION,
                 inputSchema=_TOOL_SCHEMA,
             )
@@ -91,7 +90,7 @@ def create_server() -> Server:
     async def call_tool(
         name: str, arguments: dict[str, Any]
     ) -> list[TextContent]:
-        if name != "web_search_prime":
+        if name != "web_search":
             return [TextContent(type="text", text=f"unknown tool: {name}")]
 
         import anyio
@@ -100,7 +99,7 @@ def create_server() -> Server:
         from .orchestrate import orchestrate
 
         query = arguments.get("search_query", "")
-        log.info("web_search_prime call: query=%r", query)
+        log.info("web_search call: query=%r", query)
 
         try:
             results = await anyio.to_thread.run_sync(

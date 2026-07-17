@@ -5,7 +5,7 @@
 一个面向 MCP-capable agent（Claude Code、ZCode，以及任何支持 Model Context Protocol 的客户端）的**免费、不限量的网页搜索**。它执行搜索查询，返回带页面正文摘录的结果，agent 可直接阅读 —— 是众多 agent 客户端内置的付费、限流 `web_search_prime` 工具的替代品。
 
 - **免费且不限量** —— 通过普通 HTTP 搜索 DuckDuckGo。无需 API key，没有配额，没有月度限额，不会遇到 429。
-- **Drop-in 兼容** —— 暴露一个名为 `web_search_prime` 的工具，名字和参数都和付费版一致，所以 agent 的提示词和工具调用无需改动。
+- **Drop-in 兼容** —— 暴露一个名为 `web_search` 的工具，参数和付费 `web_search_prime` 一致，所以 agent 的提示词无需改动（工具名不同，但 agent 按描述选工具，不按硬编码名字）。
 - **启动可靠** —— 以单个自包含二进制分发（Python 解释器封装在内）。不用 `npx`，无需安装运行时，启动时不联网。第一次就能连上，每次都能。
 - **近乎零维护** —— 对 DuckDuckGo 的访问通过 `ddgs` 库进行，它替我们处理反爬、限流、重试。没有要跟进的抓取引擎。
 
@@ -14,7 +14,7 @@
 给它一个搜索查询，返回带页面正文摘录的排序结果列表：
 
 ```
-web_search_prime({ "search_query": "rust tokio tutorial" })
+web_search({ "search_query": "rust tokio tutorial" })
   → [{ "title": "Tutorial | Tokio", "url": "https://tokio.rs/tokio/tutorial",
        "summary": "Tokio is an asynchronous runtime for the Rust …",
        "site_name": "tokio.rs", "favicon": "https://tokio.rs/favicon.ico" },
@@ -109,19 +109,19 @@ web_search_prime({ "search_query": "rust tokio tutorial" })
 
 > **替换路径：** 上面的示例用的是推荐安装位置，`<username>` 是占位符 —— 替换成你的实际用户名（或如果你的客户端支持环境变量展开，用 `%LOCALAPPDATA%`）。如果你把二进制放在别处，相应调整路径。
 
-> **命名：** key（上面的 `chhsich-web-search`）是你在客户端这边给 server 的标签 —— 叫什么都行，但用一个独立的 key，这样如果你还配置着官方 `web-search-prime`，就不会冲突。它暴露的工具名为 `web_search_prime`（刻意如此，为了 drop-in 兼容）：两个 server 都暴露名为 `web_search_prime` 的工具会产生歧义，所以只保留一个。想完全*替代*官方工具，先把官方那条删掉/改名，然后才能复用 `web-search-prime` 这个 key。
+> **命名：** key（上面的 `chhsich-web-search`）是你在客户端这边给 server 的标签 —— 叫什么都行；它不会和官方 `web-search-prime` 那条冲突，两者可以并存。它暴露的工具名为 `web_search`（刻意与付费的 `web_search_prime` 区分 —— 我们描述功能，不模仿名字）。
 
 > **路径提示（Windows）：** 用包含 `.exe` 的完整绝对路径。JSON 里用正斜杠即可，能避免反斜杠转义。
 
 > **Windows SmartScreen 提示：** release 二进制未签名，所以 Windows 首次运行时可能弹出"Windows 已保护你的电脑"提示。点 **更多信息 → 仍要运行**。未签名二进制都会这样，且只发生一次。
 
-编辑配置后重启客户端。`web_search_prime` 工具就会和内置工具一起出现，模型可以像调用其他工具一样调用它。
+编辑配置后重启客户端。`web_search` 工具就会和内置工具一起出现，模型可以像调用其他工具一样调用它。
 
 ### 3. 验证它工作
 
 重启客户端后，让模型搜索任意内容，例如：
 
-> 用 web_search_prime 工具搜索 "rust async runtime"
+> 用 web_search 工具搜索 "rust async runtime"
 
 你应该得到一组结果，每条包含 title、url、summary、site name、favicon。如果工具缺失或返回空，检查 `command` 路径是否指向你解压出来的二进制。
 

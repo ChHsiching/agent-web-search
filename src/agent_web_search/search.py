@@ -1,6 +1,6 @@
 """DuckDuckGo search via the ``ddgs`` library + parameter mapping.
 
-Maps the five ``web_search_prime`` parameters to ``ddgs.text()`` arguments and
+Maps the five ``web_search`` parameters to ``ddgs.text()`` arguments and
 runs the search. This is the backend connection (ADR-0006): ``ddgs`` handles
 the anti-bot/rate-limit/retry logic; we just map params and call it.
 
@@ -45,7 +45,7 @@ _LOCATION_TO_REGION: dict[str, str] = {
 
 
 def map_recency(recency: str | None) -> str | None:
-    """Map the web_search_prime recency string to a ddgs timelimit.
+    """Map the web_search recency string to a ddgs timelimit.
 
     Unknown/None values map to None (no limit), matching the target default.
     """
@@ -55,7 +55,7 @@ def map_recency(recency: str | None) -> str | None:
 
 
 def map_location(location: str | None) -> str:
-    """Map the web_search_prime location to a ddgs region. Default us-en."""
+    """Map the web_search location to a ddgs region. Default us-en."""
     return _LOCATION_TO_REGION.get(location or "", "us-en")
 
 

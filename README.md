@@ -10,9 +10,10 @@ into many agent clients.
 
 - **Free and uncapped** — searches DuckDuckGo over plain HTTP. No API key, no
   quota, no monthly limit, no 429s.
-- **Drop-in compatible** — exposes a tool named `web_search_prime` with the
-  same name and parameters as the paid one, so your agent's prompts and tool
-  calls work unchanged.
+- **Drop-in compatible** — exposes a tool named `web_search` with the same
+  parameters as the paid `web_search_prime`, so your agent's prompts work
+  unchanged (the tool name differs, but agents pick tools by description, not
+  hardcoded name).
 - **Reliable launch** — ships as a single self-contained binary (Python
   interpreter bundled inside). No `npx`, no runtime to install, no network at
   startup. It connects the first time, every time.
@@ -26,7 +27,7 @@ Give it a search query, get back a ranked list of results with page-body
 extracts:
 
 ```
-web_search_prime({ "search_query": "rust tokio tutorial" })
+web_search({ "search_query": "rust tokio tutorial" })
   → [{ "title": "Tutorial | Tokio", "url": "https://tokio.rs/tokio/tutorial",
        "summary": "Tokio is an asynchronous runtime for the Rust …",
        "site_name": "tokio.rs", "favicon": "https://tokio.rs/favicon.ico" },
@@ -149,13 +150,10 @@ contract — there are no other parameters to set.
 > the binary somewhere else.
 
 > **Naming:** the key (`chhsich-web-search` above) is your client-side label
-> for the server — call it whatever you want, but use a distinct key so it
-> doesn't collide with the official `web-search-prime` entry if you still have
-> it. The tool it exposes is named `web_search_prime` (deliberately, for
-> drop-in compatibility): two servers that both expose a tool named
-> `web_search_prime` are ambiguous, so keep only one configured. To fully
-> *replace* the official tool, remove/rename its entry first, then you may
-> reuse the key `web-search-prime`.
+> for the server — call it whatever you want; it won't collide with the
+> official `web-search-prime` entry, so both can coexist. The tool it exposes
+> is named `web_search` (intentionally distinct from the paid
+> `web_search_prime` — we describe the function, not mimic the name).
 
 > **Path tip (Windows):** use the full absolute path including `.exe`.
 > Forward slashes work in JSON and avoid backslash escaping.
@@ -165,14 +163,14 @@ contract — there are no other parameters to set.
 > **More info → Run anyway**. This is expected for unsigned binaries and only
 > happens once.
 
-Restart your client after editing the config. The `web_search_prime` tool now
+Restart your client after editing the config. The `web_search` tool now
 appears alongside the built-in tools and the model can call it like any other.
 
 ### 3. Verify it works
 
 After restarting your client, ask the model to search for anything, e.g.:
 
-> Use the web_search_prime tool to search for "rust async runtime"
+> Use the web_search tool to search for "rust async runtime"
 
 You should get back a list of results, each with a title, URL, summary,
 site name, and favicon. If the tool is missing or returns nothing, check that
