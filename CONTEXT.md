@@ -7,7 +7,8 @@ exposed as a stdio MCP server. Searches the web and returns results with page-bo
 
 **Source**:
 An upstream a search query is sent to. A source answers one search query.
-Currently: a SearXNG public instance.
+Currently: DuckDuckGo via the `ddgs` library (which itself aggregates multiple
+search Sources — bing, brave, yandex, etc.). See ADR-0006.
 _Avoid_: engine, backend, provider.
 
 **Fan-out**:
