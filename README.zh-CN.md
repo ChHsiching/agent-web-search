@@ -44,15 +44,15 @@ web_search({ "search_query": "rust tokio tutorial" })
 
 ### 1. 下载对应平台的二进制
 
-从[最新 release](../../releases) 下载适合你平台的压缩包：
+从[最新 release](../../releases) 下载适合你平台的文件 —— 是一个单一自包含二进制（Python 解释器和所有依赖都封装在内，所以没有压缩包，无需解压）：
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows | `agent-web-search-windows-x64.zip` |
-| Linux | `agent-web-search-linux-x64.tar.gz` |
-| macOS | `agent-web-search-macos.tar.gz` |
+| Windows | `agent-web-search-windows-x64.exe` |
+| Linux | `agent-web-search-linux-x64` |
+| macOS | `agent-web-search-macos` |
 
-解压得到单个 `agent-web-search`（Windows 下是 `.exe`）二进制。无需安装器，无需安装运行时（不需要 Node 或 Python —— Python 解释器已封装进二进制）。
+无需安装器，无需安装运行时（不需要 Node 或 Python）。
 
 **文件放哪里：** 每个平台都有一个**推荐的用户级位置** —— 不需要管理员权限，是用户自己安装的程序约定俗成的存放点：
 

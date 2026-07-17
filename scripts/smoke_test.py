@@ -18,7 +18,11 @@ import time
 
 
 def main() -> int:
-    exe = "dist/agent-web-search.exe" if sys.platform == "win32" else "dist/agent-web-search"
+    # Prefer an explicit binary path from the environment (CI passes the renamed
+    # platform asset); fall back to the default dist/ output for local runs.
+    exe = os.environ.get("SMOKE_BIN") or (
+        "dist/agent-web-search.exe" if sys.platform == "win32" else "dist/agent-web-search"
+    )
     if not os.path.exists(exe):
         print(f"FAIL: binary not found at {exe}", file=sys.stderr)
         return 1

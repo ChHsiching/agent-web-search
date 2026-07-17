@@ -64,17 +64,17 @@ content, not summaries — no model calls, no digests.
 
 ### 1. Download the binary for your platform
 
-Grab the right archive from the [latest release](../../releases):
+Grab the right file from the [latest release](../../releases) — it's a single,
+self-contained binary (the Python interpreter and all dependencies are packed
+inside, so no archive, no extraction step):
 
 | Platform | File |
 | --- | --- |
-| Windows | `agent-web-search-windows-x64.zip` |
-| Linux | `agent-web-search-linux-x64.tar.gz` |
-| macOS | `agent-web-search-macos.tar.gz` |
+| Windows | `agent-web-search-windows-x64.exe` |
+| Linux | `agent-web-search-linux-x64` |
+| macOS | `agent-web-search-macos` |
 
-Extract it to get a single `agent-web-search` (or `.exe`) binary. No installer,
-no runtime to install (no Node or Python required — the Python interpreter is
-packed inside the binary).
+No installer, no runtime to install (no Node or Python required).
 
 **Where to put the file:** a recommended per-user location exists on each
 platform — it needs no admin rights and is the conventional spot for

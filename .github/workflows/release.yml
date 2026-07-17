@@ -1,9 +1,9 @@
 name: release
 
 # Builds a PyInstaller single-file executable per target platform on a version
-# tag and publishes it as a GitHub Release asset. PyInstaller does NOT
-# cross-compile, so each platform needs its own runner. The binary is the
-# primary install path — users download one file and run it, no Python install.
+# tag and publishes it as a GitHub Release asset — as a BARE binary (no archive),
+# so users download one file and run it directly. PyInstaller does NOT
+# cross-compile, so each platform needs its own runner.
 
 on:
   push:
@@ -23,14 +23,14 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            asset_suffix: windows-x64
-            asset_ext: zip
+            asset_name: agent-web-search-windows-x64.exe
+            bin_name: agent-web-search.exe
           - os: ubuntu-latest
-            asset_suffix: linux-x64
-            asset_ext: tar.gz
+            asset_name: agent-web-search-linux-x64
+            bin_name: agent-web-search
           - os: macos-latest
-            asset_suffix: macos
-            asset_ext: tar.gz
+            asset_name: agent-web-search-macos
+            bin_name: agent-web-search
 
     steps:
       - uses: actions/checkout@v4
@@ -49,28 +49,27 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller agent-web-search.spec --noconfirm
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
+      - name: Rename binary to platform asset name
+        # Publish the bare binary (no archive) so users download one file and
+        # run it directly. The PyInstaller output is dist/<bin_name>; rename it
+        # to the platform-specific asset name at the repo root for upload.
+        shell: bash
         run: |
-          cd dist
-          7z a "../agent-web-search-${{ matrix.asset_suffix }}.zip" agent-web-search.exe
-
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          cd dist
-          tar czf "../agent-web-search-${{ matrix.asset_suffix }}.tar.gz" agent-web-search
+          mv "dist/${{ matrix.bin_name }}" "${{ matrix.asset_name }}"
+          ls -la "${{ matrix.asset_name }}"
 
       - name: Smoke test the built binary
         # Cross-platform: uses a script file rather than a shell heredoc,
-        # which PowerShell (Windows runners) does not support.
+        # which PowerShell on Windows runners doesn't support.
+        env:
+          SMOKE_BIN: ${{ matrix.asset_name }}
         run: python scripts/smoke_test.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agent-web-search-${{ matrix.asset_suffix }}
-          path: agent-web-search-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
           # Short retention: artifacts are only needed to pass the binary to
           # the release job, which re-uploads to the GitHub Release. Keep 1 day
           # for debugging, then auto-expire to avoid filling storage quota.
