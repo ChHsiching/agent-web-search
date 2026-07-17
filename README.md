@@ -1,6 +1,6 @@
-> Languages: **English** · [简体中文](README.zh-CN.md)
-
 # agent-web-search
+
+> Languages: **English** · [简体中文](README.zh-CN.md)
 
 A **free, unlimited, stable** web-search MCP tool for coding agents (Claude Code, Codex, ZCode). A drop-in replacement for paid/hosted `web_search_prime` — same tool name, same parameters, zero runtime cost.
 
@@ -8,7 +8,7 @@ It searches the web via **DuckDuckGo** (using the [`ddgs`](https://github.com/de
 
 ## Why
 
-The official `web_search_prime` tools are metered and return `429 Weekly/Monthly Limit Exhausted` mid-session. This project exists so a developer can give their agent web search that never runs out.
+Coding agents need web search to look up docs, APIs, and error solutions — but every mainstream agent's official search tool is paid and metered. Hit the quota and the tool returns `429` mid-session, leaving the agent unable to search until the meter resets. This project gives any coding agent a search capability that is free, unmetered, and never runs out — as a drop-in MCP server with the same tool name and parameters as the paid one.
 
 ## Install
 

@@ -1,6 +1,6 @@
-> 其他语言：[English](README.md) · **简体中文**
-
 # agent-web-search
+
+> 其他语言：[English](README.md) · **简体中文**
 
 一个**免费、不限量、稳定**的 web 搜索 MCP 工具，供编程 agent（Claude Code、Codex、ZCode）使用。它是付费/托管的 `web_search_prime` 的 drop-in（即插即用）替代品——同名、同参数、零成本。
 
@@ -8,7 +8,7 @@
 
 ## 为什么做这个
 
-官方的 `web_search_prime` 工具按量计费，session 中途经常返回 `429 Weekly/Monthly Limit Exhausted`。这个项目存在的意义是：让开发者给自己的 agent 一个**永远不会用完**的搜索能力。
+编程 agent 需要联网搜索来查文档、API、报错解决方案——但主流 agent 的官方搜索工具清一色付费、按量计费。配额一用完，工具就在 session 中途返回 `429`，agent 在计量重置之前都搜不了东西。这个项目给任意编程 agent 一个**免费、不计费、永远用不完**的搜索能力——以 drop-in MCP server 的形式提供，工具名和参数都和付费版一致。
 
 ## 安装
 
