@@ -39,7 +39,7 @@ This is a standard stdio MCP server. Add it to your agent's MCP config — the s
 ```json
 {
   "mcpServers": {
-    "web-search-prime": {
+    "agent-web-search": {
       "type": "stdio",
       "command": "/absolute/path/to/agent-web-search",
       "args": []
@@ -48,9 +48,17 @@ This is a standard stdio MCP server. Add it to your agent's MCP config — the s
 }
 ```
 
-- `command`: the full path to the binary you extracted (Option A), or just `agent-web-search` if it's on your `PATH` (Option B).
-- `args`: empty — the server takes no arguments.
-- `type`: must be `"stdio"`.
+- **`command`**: the full path to the binary you extracted (Option A), or just `agent-web-search` if it's on your `PATH` (Option B).
+- **`args`**: empty — the server takes no arguments.
+- **`type`**: must be `"stdio"`.
+
+The server key (here `agent-web-search`) is your label — name it whatever you like. It does **not** need to match the official `web-search-prime`.
+
+> ⚠️ **Don't reuse the key `web-search-prime`** if you still have the official one configured — the keys would collide and one would silently overwrite the other. Use a distinct key like `agent-web-search`. To fully *replace* the official tool instead, first remove/rename its entry, then you may reuse `web-search-prime`.
+
+The server exposes a tool named **`web_search_prime`** — the same tool name and parameters as the paid version. So your agent's prompts and tool calls work unchanged regardless of the server key you chose.
+
+> Note: if two loaded servers both expose a tool named `web_search_prime`, agent behavior is undefined (one usually shadows the other). Keep only one of them configured to avoid ambiguity.
 
 **Per-agent config file locations** (where to put the block above):
 
@@ -58,7 +66,7 @@ This is a standard stdio MCP server. Add it to your agent's MCP config — the s
 - **Claude Code**: `~/.claude.json` (or the project `.mcp.json`).
 - **Codex**: your Codex MCP servers config.
 
-Once configured, restart the agent. It will see a `web_search_prime` tool with the same parameters as the paid version — your prompts and tool calls work unchanged.
+Once configured, restart the agent. It will discover the `web_search_prime` tool.
 
 ## How it works
 
