@@ -39,7 +39,7 @@ This is a standard stdio MCP server. Add it to your agent's MCP config — the s
 ```json
 {
   "mcpServers": {
-    "agent-web-search": {
+    "chhsich-web-search": {
       "type": "stdio",
       "command": "/absolute/path/to/agent-web-search",
       "args": []
@@ -52,9 +52,9 @@ This is a standard stdio MCP server. Add it to your agent's MCP config — the s
 - **`args`**: empty — the server takes no arguments.
 - **`type`**: must be `"stdio"`.
 
-The server key (here `agent-web-search`) is your label — name it whatever you like. It does **not** need to match the official `web-search-prime`.
+The server key (here `chhsich-web-search`) is your label — name it whatever you like. The default `chhsich-web-search` is namespaced by author so it won't collide with the official `web-search-prime` or anyone else's key.
 
-> ⚠️ **Don't reuse the key `web-search-prime`** if you still have the official one configured — the keys would collide and one would silently overwrite the other. Use a distinct key like `agent-web-search`. To fully *replace* the official tool instead, first remove/rename its entry, then you may reuse `web-search-prime`.
+> ⚠️ **Don't reuse the key `web-search-prime`** if you still have the official one configured — the keys would collide and one would silently overwrite the other. To fully *replace* the official tool, first remove/rename its entry, then you may reuse `web-search-prime`.
 
 The server exposes a tool named **`web_search_prime`** — the same tool name and parameters as the paid version. So your agent's prompts and tool calls work unchanged regardless of the server key you chose.
 
