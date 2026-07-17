@@ -1,104 +1,219 @@
 # agent-web-search
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [简体中文](./README.zh-CN.md)
 
-A **free, unlimited, stable** web-search MCP tool for coding agents (Claude Code, Codex, ZCode). A drop-in replacement for paid/hosted `web_search_prime` — same tool name, same parameters, zero runtime cost.
+A **free, uncapped web search** for MCP-capable agents (Claude Code, ZCode, and
+any client that speaks the Model Context Protocol). It runs a search query and
+returns results with page-body extracts the agent can read directly — a
+drop-in replacement for the paid, rate-limited `web_search_prime` tool built
+into many agent clients.
 
-It searches the web via **DuckDuckGo** (using the [`ddgs`](https://github.com/deedy5/duckduckgo_search) library, which handles anti-bot/rate-limit logic), with no API key, no Docker, no per-query billing. Results include page-body extracts so the agent can read and reason about each hit.
+- **Free and uncapped** — searches DuckDuckGo over plain HTTP. No API key, no
+  quota, no monthly limit, no 429s.
+- **Drop-in compatible** — exposes a tool named `web_search_prime` with the
+  same name and parameters as the paid one, so your agent's prompts and tool
+  calls work unchanged.
+- **Reliable launch** — ships as a single self-contained binary (Python
+  interpreter bundled inside). No `npx`, no runtime to install, no network at
+  startup. It connects the first time, every time.
+- **Near-zero maintenance** — DuckDuckGo access goes through the `ddgs`
+  library, which handles anti-bot, rate-limit, and retry logic for us. No
+  scraping engine to keep up with.
 
-## Why
+## What it does
 
-Coding agents need web search to look up docs, APIs, and error solutions — but every mainstream agent's official search tool is paid and metered. Hit the quota and the tool returns `429` mid-session, leaving the agent unable to search until the meter resets. This project gives any coding agent a search capability that is free, unmetered, and never runs out — as a drop-in MCP server with the same tool name and parameters as the paid one.
+Give it a search query, get back a ranked list of results with page-body
+extracts:
+
+```
+web_search_prime({ "search_query": "rust tokio tutorial" })
+  → [{ "title": "Tutorial | Tokio", "url": "https://tokio.rs/tokio/tutorial",
+       "summary": "Tokio is an asynchronous runtime for the Rust …",
+       "site_name": "tokio.rs", "favicon": "https://tokio.rs/favicon.ico" },
+     …]
+```
+
+The top results get their page body fetched and extracted (via a Readability
+engine), so the agent can read the actual content rather than just a short
+snippet. Results beyond the top few carry the source's own snippet. We return
+content, not summaries — no model calls, no digests.
+
+### Tool parameters
+
+| Parameter                | Required | Default  | Description                                                       |
+| ------------------------ | -------- | -------- | ----------------------------------------------------------------- |
+| `search_query`           | yes      | —        | The search terms.                                                 |
+| `search_domain_filter`   | no       | —        | Restrict to a domain, e.g. `docs.rust-lang.org`.                  |
+| `search_recency_filter`  | no       | `noLimit`| `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, `noLimit`.            |
+| `content_size`           | no       | `medium` | `medium` (~500-word extract) or `high` (~2500-word extract).      |
+| `location`               | no       | `cn`     | `cn` or `us`.                                                     |
+
+### What it does *not* do
+
+- **No web fetch / reader** — it searches; it does not fetch arbitrary URLs.
+  (That's a separate tool — see [`agent-web-fetch`](https://github.com/ChHsiching/agent-web-fetch).)
+- **No summarization / translation** — it returns page-body text, it doesn't
+  process it. No paid model calls.
+- **No image / news / video search** — only general web results, which covers
+  the vast majority of agent needs.
+- **No `max_results`** — the result count is fixed (~10) and not exposed,
+  matching the target tool.
 
 ## Install
 
-**Option A — pre-compiled binary (recommended, no Python needed):**
+### 1. Download the binary for your platform
 
-1. Download the archive for your platform from [Releases](../../releases):
-   - Windows: `agent-web-search-windows-x64.zip`
-   - Linux: `agent-web-search-linux-x64.tar.gz`
-   - macOS: `agent-web-search-macos.tar.gz`
-2. Extract the archive — you get a single `agent-web-search` (or `.exe`) binary.
-3. Note its full path, e.g. `C:\Tools\agent-web-search.exe` or `/home/you/bin/agent-web-search`.
-4. Configure your agent using that path (below).
+Grab the right archive from the [latest release](../../releases):
 
-The binary is a PyInstaller bundle — the Python interpreter and all dependencies are packed inside, so you do **not** need Python installed. (You may also place the binary on your `PATH` and use just the name `agent-web-search` as the command.)
+| Platform | File |
+| --- | --- |
+| Windows | `agent-web-search-windows-x64.zip` |
+| Linux | `agent-web-search-linux-x64.tar.gz` |
+| macOS | `agent-web-search-macos.tar.gz` |
 
-**Option B — from source (needs Python 3.10+):**
+Extract it to get a single `agent-web-search` (or `.exe`) binary. No installer,
+no runtime to install (no Node or Python required — the Python interpreter is
+packed inside the binary).
 
-```sh
-git clone https://github.com/ChHsiching/agent-web-search.git
-cd agent-web-search
-pip install -e .
+**Where to put the file:** a recommended per-user location exists on each
+platform — it needs no admin rights and is the conventional spot for
+user-installed programs:
+
+| Platform | Recommended location |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\Programs\agent-web-search\agent-web-search.exe` |
+| macOS / Linux | `~/.local/bin/agent-web-search` |
+
+That said, MCP doesn't actually care where the file lives — it launches the
+binary via the absolute path in your config, so you can put it anywhere you
+have read/execute permission (no need to add it to `PATH`). Just don't drop it
+into other users' directories or system folders that need admin rights. The
+examples below use the recommended locations; replace the path if you put it
+elsewhere.
+
+### 2. Register it with your MCP client
+
+This is a standard **stdio MCP server**: it has no arguments and no environment
+requirements. In every MCP client the config entry is the same idea — point
+`command` at the binary's absolute path, leave `args` empty:
+
+```json
+"chhsich-web-search": {
+  "type": "stdio",
+  "command": "/absolute/path/to/agent-web-search",
+  "args": []
+}
 ```
 
-This installs an `agent-web-search` script on your `PATH`. The command below then uses just the name.
+What differs between clients is only **where** this entry goes and the exact
+key names. Concrete examples for the common ones:
 
-## Configure your agent
+**ZCode** — add the entry to its MCP servers config (a flat object keyed by
+server name, no outer wrapper):
 
-This is a standard stdio MCP server. Add it to your agent's MCP config — the shape below works for **ZCode, Claude Code, and Codex** (each reads the same `mcpServers` block):
+```json
+{
+  "chhsich-web-search": {
+    "type": "stdio",
+    "command": "C:/Users/<username>/AppData/Local/Programs/agent-web-search/agent-web-search.exe",
+    "args": []
+  }
+}
+```
+
+**Claude Code** — `~/.claude.json` (or `%USERPROFILE%\.claude.json` on Windows),
+where servers live under a `mcpServers` key:
 
 ```json
 {
   "mcpServers": {
     "chhsich-web-search": {
       "type": "stdio",
-      "command": "/absolute/path/to/agent-web-search",
+      "command": "C:/Users/<username>/AppData/Local/Programs/agent-web-search/agent-web-search.exe",
       "args": []
     }
   }
 }
 ```
 
-- **`command`**: the full path to the binary you extracted (Option A), or just `agent-web-search` if it's on your `PATH` (Option B).
-- **`args`**: empty — the server takes no arguments.
-- **`type`**: must be `"stdio"`.
+Or via the CLI (does the same thing): `claude mcp add chhsich-web-search "C:/Users/<username>/AppData/Local/Programs/agent-web-search/agent-web-search.exe"`
 
-The server key (here `chhsich-web-search`) is your label — name it whatever you like. The default `chhsich-web-search` is namespaced by author so it won't collide with the official `web-search-prime` or anyone else's key.
+**Any other stdio MCP client** — find where it keeps its MCP server list (a
+JSON/YAML config, a settings UI, etc.) and add one entry: type `stdio`,
+`command` = absolute path to the binary, `args` = `[]`. That's the whole
+contract — there are no other parameters to set.
 
-> ⚠️ **Don't reuse the key `web-search-prime`** if you still have the official one configured — the keys would collide and one would silently overwrite the other. To fully *replace* the official tool, first remove/rename its entry, then you may reuse `web-search-prime`.
+> **Replace the path:** the examples above use the recommended install location
+> with `<username>` as a placeholder — swap in your actual username (or use
+> `%LOCALAPPDATA%` if your client expands env vars). Adjust the path if you put
+> the binary somewhere else.
 
-The server exposes a tool named **`web_search_prime`** — the same tool name and parameters as the paid version. So your agent's prompts and tool calls work unchanged regardless of the server key you chose.
+> **Naming:** the key (`chhsich-web-search` above) is your client-side label
+> for the server — call it whatever you want, but use a distinct key so it
+> doesn't collide with the official `web-search-prime` entry if you still have
+> it. The tool it exposes is named `web_search_prime` (deliberately, for
+> drop-in compatibility): two servers that both expose a tool named
+> `web_search_prime` are ambiguous, so keep only one configured. To fully
+> *replace* the official tool, remove/rename its entry first, then you may
+> reuse the key `web-search-prime`.
 
-> Note: if two loaded servers both expose a tool named `web_search_prime`, agent behavior is undefined (one usually shadows the other). Keep only one of them configured to avoid ambiguity.
+> **Path tip (Windows):** use the full absolute path including `.exe`.
+> Forward slashes work in JSON and avoid backslash escaping.
 
-**Per-agent config file locations** (where to put the block above):
+> **Windows SmartScreen note:** the release binary is unsigned, so Windows may
+> show a "Windows protected your PC" prompt the first time it runs. Click
+> **More info → Run anyway**. This is expected for unsigned binaries and only
+> happens once.
 
-- **ZCode**: your ZCode MCP config (see ZCode docs for the exact file).
-- **Claude Code**: `~/.claude.json` (or the project `.mcp.json`).
-- **Codex**: your Codex MCP servers config.
+Restart your client after editing the config. The `web_search_prime` tool now
+appears alongside the built-in tools and the model can call it like any other.
 
-Once configured, restart the agent. It will discover the `web_search_prime` tool.
+### 3. Verify it works
+
+After restarting your client, ask the model to search for anything, e.g.:
+
+> Use the web_search_prime tool to search for "rust async runtime"
+
+You should get back a list of results, each with a title, URL, summary,
+site name, and favicon. If the tool is missing or returns nothing, check that
+the `command` path points at the binary you extracted.
+
+## Build from source
+
+Requires Python 3.10+.
+
+```sh
+# Install in editable mode (dev dependencies included)
+pip install -e .
+
+# Produce a standalone binary via PyInstaller
+pip install pyinstaller
+pyinstaller agent-web-search.spec --noconfirm
+# → dist/agent-web-search (or .exe on Windows)
+
+# Run the test suite
+python -m pytest
+```
+
+Each release binary is a PyInstaller bundle — the Python interpreter and all
+dependencies packed inside one file.
 
 ## How it works
 
-- **Search backend:** DuckDuckGo via the `ddgs` library — the only empirically-verified-stable free search backend. `ddgs` handles the anti-bot, rate-limit, and retry logic so we don't have to.
-- **No key, no fee:** DuckDuckGo search is free; `ddgs` is open source. Nothing to register, nothing to pay.
-- **Stability first:** the MCP `initialize` handshake waits on no network (~1s startup in the bundled binary), stdout carries only JSON-RPC, and errors degrade gracefully.
-- **Results:** each result carries `title`, `url`, `summary` (page-body extract for the top 3, source snippet for the rest), `site_name`, and `favicon`. The agent reads the raw text — we do no summarization.
-
-## Tool parameters
-
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `search_query` | yes | The search terms. |
-| `search_domain_filter` | no | Restrict to a domain, e.g. `docs.rust-lang.org`. |
-| `search_recency_filter` | no | `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, `noLimit` (default). |
-| `content_size` | no | `medium` (~500 words/extract, default) or `high` (~2500 words). |
-| `location` | no | `cn` (default) or `us`. |
-
-## Build from source (PyInstaller)
-
-To produce a standalone binary yourself:
-
-```sh
-pip install pyinstaller
-pip install -e .
-pyinstaller agent-web-search.spec --noconfirm
+```
+query → map params → DuckDuckGo (ddgs: anti-bot/retry handled)
+     → result list (title/url/snippet per hit)
+     → top results: fetch page → Readability extract → word-limited body text
+                                                        ↘ snippet fallback (never empty)
+     → assemble {title, url, summary, site_name, favicon} → JSON
 ```
 
-The binary is at `dist/agent-web-search` (or `.exe` on Windows).
+Search and page-fetch go through dependency-injected seams, so the core logic
+fan-out, extraction, and assembly are unit-tested without touching the network.
+Every failure (rate-limit, empty results, page-fetch error) comes back as a
+structured response the model can read — the server process never crashes.
 
-## Development decisions
-
-Architectural decisions are recorded in [`docs/adr/`](docs/adr/), and the domain glossary in [`CONTEXT.md`](CONTEXT.md). See issue #1 for the full spec. Key note: an earlier version targeted SearXNG public instances in Rust, but live testing found 0/38 instances usable — the project switched to DuckDuckGo via `ddgs` (ADR-0006).
+See `CONTEXT.md` for the project glossary and `docs/adr/` for the architectural
+decisions. Note: an earlier version targeted SearXNG public instances (in
+Rust), but live testing found 0/38 instances usable — the project switched to
+DuckDuckGo via `ddgs` (ADR-0006).
