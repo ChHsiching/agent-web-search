@@ -60,6 +60,25 @@ content, not summaries — no model calls, no digests.
 - **No `max_results`** — the result count is fixed (~10) and not exposed,
   matching the target tool.
 
+### Known limitations
+
+These are inherent to the free, dependency-light design (ADR-0006), not bugs:
+
+- **Recency filter is best-effort** — `search_recency_filter` is forwarded to
+  the upstream Source, which applies it loosely. Results are mostly recent but
+  not strictly bounded; this is upstream behavior we cannot tighten without
+  taking on a heavier-weight Source.
+- **No published-date field** — each result carries title / url / summary /
+  site_name / favicon only. The upstream Source returns no timestamp, so there
+  is nothing to expose (scope of the underlying data, not a missing feature).
+- **Quality depends on query form** — keyword queries (e.g.
+  `rust tokio spawn example`) return sharply more relevant results than full
+  natural-language questions, especially for Chinese queries. The tool
+  description asks the model for keywords (ADR-0007); a prompt that encourages
+  keyword queries helps further.
+- **No event clustering / structured digest** — out of scope. The tool returns
+  a flat ranked list with page-body extracts.
+
 ## Install
 
 ### 1. Download the binary for your platform

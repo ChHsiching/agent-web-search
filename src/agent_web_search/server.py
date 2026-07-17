@@ -20,6 +20,11 @@ log = logging.getLogger(__name__)
 
 # The input schema for web_search — matches the paid web_search_prime tool's
 # params 1:1 (independent tool name, same parameters = drop-in).
+#
+# The `search_query` description and `_TOOL_DESCRIPTION` below are intentionally
+# written as keyword-query guidance, not terse labels — see ADR-0007. They are
+# the fix for a measured relevance regression on colloquial queries; do not
+# trim them without re-running the keyword-vs-question comparison.
 _TOOL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
