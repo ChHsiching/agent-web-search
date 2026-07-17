@@ -71,6 +71,11 @@ jobs:
         with:
           name: agent-web-search-${{ matrix.asset_suffix }}
           path: agent-web-search-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}
+          # Short retention: artifacts are only needed to pass the binary to
+          # the release job, which re-uploads to the GitHub Release. Keep 1 day
+          # for debugging, then auto-expire to avoid filling storage quota.
+          retention-days: 1
+          overwrite: true
 
   release:
     name: Publish release
