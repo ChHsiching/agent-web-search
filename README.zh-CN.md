@@ -1,6 +1,6 @@
 # agent-web-search
 
-> 其他语言：[English](README.md) · **简体中文**
+[English](README.md) | **简体中文**
 
 一个**免费、不限量、稳定**的 web 搜索 MCP 工具，供编程 agent（Claude Code、Codex、ZCode）使用。它是付费/托管的 `web_search_prime` 的 drop-in（即插即用）替代品——同名、同参数、零成本。
 
