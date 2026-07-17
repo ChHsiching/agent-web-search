@@ -1,85 +1,89 @@
 name: release
 
-# Cross-compiles pre-compiled binaries for 5 platforms on a version tag and
-# publishes them as GitHub Release assets. The primary install path — users
-# download one file and run it, no toolchain needed.
+# Builds a PyInstaller single-file executable per target platform on a version
+# tag and publishes it as a GitHub Release asset. PyInstaller does NOT
+# cross-compile, so each platform needs its own runner. The binary is the
+# primary install path — users download one file and run it, no Python install.
 
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: # allow manual runs for testing the pipeline
+  workflow_dispatch: # allow manual runs for testing
 
 permissions:
   contents: write # needed to create the release and upload assets
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            archive: zip
-            bin_ext: .exe
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            bin_ext: ""
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            bin_ext: ""
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            bin_ext: ""
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            bin_ext: ""
+          - os: windows-latest
+            asset_suffix: windows-x64
+            asset_ext: zip
+          - os: ubuntu-latest
+            asset_suffix: linux-x64
+            asset_ext: tar.gz
+          - os: macos-latest
+            asset_suffix: macos
+            asset_ext: tar.gz
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          targets: ${{ matrix.target }}
+          python-version: "3.11"
 
-      # The aarch64-linux target cross-compiles from x64; install the cross
-      # linker toolchain so linking succeeds.
-      - name: Install aarch64-linux cross toolchain
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e .
 
-      - name: Build
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build with PyInstaller
+        run: pyinstaller agent-web-search.spec --noconfirm
 
-      - name: Package (zip)
-        if: matrix.archive == 'zip'
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../agent-web-search-${{ matrix.target }}.zip agent-web-search${{ matrix.bin_ext }}
+          cd dist
+          7z a "../agent-web-search-${{ matrix.asset_suffix }}.zip" agent-web-search.exe
 
-      - name: Package (tar.gz)
-        if: matrix.archive == 'tar.gz'
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../agent-web-search-${{ matrix.target }}.tar.gz agent-web-search${{ matrix.bin_ext }}
+          cd dist
+          tar czf "../agent-web-search-${{ matrix.asset_suffix }}.tar.gz" agent-web-search
+
+      - name: Smoke test the built binary
+        run: |
+          # Verify the binary actually starts and responds to MCP initialize.
+          python - <<'PY'
+          import json, subprocess, sys, time
+          exe = "dist/agent-web-search.exe" if sys.platform == "win32" else "dist/agent-web-search"
+          t0 = time.monotonic()
+          p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          p.stdin.write((json.dumps({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0.1"}}}) + "\n").encode())
+          p.stdin.flush()
+          line = p.stdout.readline()
+          assert line, "no response from binary"
+          r = json.loads(line)
+          assert "agent-web-search" in r["result"]["serverInfo"]["name"], f"bad name: {r}"
+          p.terminate()
+          print(f"smoke test OK: {time.monotonic()-t0:.2f}s startup")
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agent-web-search-${{ matrix.target }}
-          path: agent-web-search-${{ matrix.target }}.${{ matrix.archive }}
+          name: agent-web-search-${{ matrix.asset_suffix }}
+          path: agent-web-search-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}
 
   release:
     name: Publish release

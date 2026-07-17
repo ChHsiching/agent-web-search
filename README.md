@@ -2,7 +2,7 @@
 
 A **free, unlimited, stable** web-search MCP tool for coding agents (Claude Code, Codex, ZCode). A drop-in replacement for paid/hosted `web_search_prime` — same tool name, same parameters, zero runtime cost.
 
-It searches the web by querying **SearXNG public instances** (rotating across many), with no API key, no Docker, no Python, and no per-query billing. Results include page-body extracts so the agent can read and reason about each hit.
+It searches the web via **DuckDuckGo** (using the [`ddgs`](https://github.com/deedy5/duckduckgo_search) library, which handles anti-bot/rate-limit logic), with no API key, no Docker, no per-query billing. Results include page-body extracts so the agent can read and reason about each hit.
 
 ## Why
 
@@ -10,22 +10,26 @@ The official `web_search_prime` tools are metered and return `429 Weekly/Monthly
 
 ## Install
 
-**Option A — pre-compiled binary (recommended, no toolchain needed):**
+**Option A — pre-compiled binary (recommended, no Python needed):**
 
-1. Download the binary for your platform from [Releases](../../releases):
-   - Windows: `agent-web-search-x86_64-pc-windows-msvc.zip`
-   - Linux x64: `agent-web-search-x86_64-unknown-linux-gnu.tar.gz`
-   - Linux arm64: `agent-web-search-aarch64-unknown-linux-gnu.tar.gz`
-   - macOS x64: `agent-web-search-x86_64-apple-darwin.tar.gz`
-   - macOS arm64 (Apple Silicon): `agent-web-search-aarch64-apple-darwin.tar.gz`
+1. Download the archive for your platform from [Releases](../../releases):
+   - Windows: `agent-web-search-windows-x64.zip`
+   - Linux: `agent-web-search-linux-x64.tar.gz`
+   - macOS: `agent-web-search-macos.tar.gz`
 2. Extract and place the binary on your `PATH`.
 3. Configure your agent (below).
 
-**Option B — `cargo install` (needs a Rust toolchain):**
+The binary is a PyInstaller bundle — Python interpreter and all dependencies are packed inside, so you do **not** need Python installed.
+
+**Option B — from source (needs Python 3.10+):**
 
 ```sh
-cargo install agent-web-search
+git clone https://github.com/ChHsiching/agent-web-search.git
+cd agent-web-search
+pip install -e .
 ```
+
+Then run via `agent-web-search` (the installed script) or `python -m agent_web_search`.
 
 ## Configure your agent
 
@@ -50,9 +54,9 @@ Once configured, the agent sees a `web_search_prime` tool with the same paramete
 
 ## How it works
 
-- **Sources:** queries are fanned out concurrently to the top 3 healthiest SearXNG instances (drawn live from [searx.space](https://searx.space), auto-filtered and ranked by latency). On failure, it retries the next batch down the list. No single instance is a dependency.
-- **No key, no fee:** SearXNG public instances are free and volunteer-run; the instance list self-updates, so there is nothing to maintain.
-- **Stability first:** the MCP `initialize` handshake waits on no network, stdout carries only JSON-RPC, and the instance list is cached locally so a cold start degrades gracefully.
+- **Search backend:** DuckDuckGo via the `ddgs` library — the only empirically-verified-stable free search backend. `ddgs` handles the anti-bot, rate-limit, and retry logic so we don't have to.
+- **No key, no fee:** DuckDuckGo search is free; `ddgs` is open source. Nothing to register, nothing to pay.
+- **Stability first:** the MCP `initialize` handshake waits on no network (~1s startup in the bundled binary), stdout carries only JSON-RPC, and errors degrade gracefully.
 - **Results:** each result carries `title`, `url`, `summary` (page-body extract for the top 3, source snippet for the rest), `site_name`, and `favicon`. The agent reads the raw text — we do no summarization.
 
 ## Tool parameters
@@ -65,16 +69,18 @@ Once configured, the agent sees a `web_search_prime` tool with the same paramete
 | `content_size` | no | `medium` (~500 words/extract, default) or `high` (~2500 words). |
 | `location` | no | `cn` (default) or `us`. |
 
-## Build from source
+## Build from source (PyInstaller)
+
+To produce a standalone binary yourself:
 
 ```sh
-git clone https://github.com/ChHsiching/agent-web-search.git
-cd agent-web-search
-cargo build --release
+pip install pyinstaller
+pip install -e .
+pyinstaller agent-web-search.spec --noconfirm
 ```
 
-The binary is at `target/release/agent-web-search` (or `.exe` on Windows).
+The binary is at `dist/agent-web-search` (or `.exe` on Windows).
 
 ## Development decisions
 
-Architectural decisions are recorded in [`docs/adr/`](docs/adr/), and the domain glossary in [`CONTEXT.md`](CONTEXT.md). See issue #1 for the full spec.
+Architectural decisions are recorded in [`docs/adr/`](docs/adr/), and the domain glossary in [`CONTEXT.md`](CONTEXT.md). See issue #1 for the full spec. Key note: an earlier version targeted SearXNG public instances in Rust, but live testing found 0/38 instances usable — the project switched to DuckDuckGo via `ddgs` (ADR-0006).
