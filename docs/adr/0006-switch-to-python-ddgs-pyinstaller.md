@@ -48,7 +48,7 @@ The only empirically-verified-stable search backend is **DuckDuckGo accessed thr
 ## What carries over (the architectural investment is not wasted)
 
 The design decisions that are backend- and language-independent still hold:
-- Single stdio MCP server, one `web_search_prime` tool, 5-param schema 1:1 with target (drop-in).
+- Single stdio MCP server, one `web_search` tool (named for the function, not mimicking the paid `web_search_prime`), 5-param schema 1:1 with the target tool (drop-in).
 - MCP startup discipline (ADR-0004): clean stdout, no network before handshake, graceful startup. Re-verified for Python+PyInstaller (0.89s startup).
 - No summarization — page-body extract by word count (ADR-0001 scope decision).
 - Fan-out / retry / health-score *concepts* apply (ddgs handles DDG-internal retry, but the orchestration shape for top-N extract + URL derivation remains).
