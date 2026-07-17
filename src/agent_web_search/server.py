@@ -26,8 +26,11 @@ _TOOL_SCHEMA: dict[str, Any] = {
         "search_query": {
             "type": "string",
             "description": (
-                "Content to be searched, it is recommended that the search "
-                "query not exceed 70 characters."
+                "Search terms. Use concise keywords rather than a full "
+                "natural-language question — e.g. prefer "
+                '"tokio spawn rust example" over "how do I use tokio spawn '
+                'in rust". Drop filler words (the, a, how to, what is, '
+                "今天有什么, 请问). Keep under 70 characters."
             ),
         },
         "search_domain_filter": {
@@ -61,8 +64,9 @@ _TOOL_SCHEMA: dict[str, Any] = {
 }
 
 _TOOL_DESCRIPTION = (
-    "Search web information, returns results including web page title, "
-    "web page URL, web page summary, website name, website icon, etc."
+    "Search the web and return results (title, URL, page summary, site "
+    "name, favicon). Form search_query as concise keywords, not a full "
+    "question — keyword queries return more relevant results."
 )
 
 
