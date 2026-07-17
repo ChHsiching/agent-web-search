@@ -87,12 +87,37 @@ def create_server() -> Server:
         if name != "web_search_prime":
             return [TextContent(type="text", text=f"unknown tool: {name}")]
 
-        # Stub: returns an empty result list until the search pipeline is
-        # wired up (ticket #15). The real implementation will call the search
-        # orchestration layer.
+        import anyio
+        import json
+
+        from .orchestrate import orchestrate
+
         query = arguments.get("search_query", "")
-        log.info("web_search_prime stub call: query=%r", query)
-        return [TextContent(type="text", text="[]")]
+        log.info("web_search_prime call: query=%r", query)
+
+        try:
+            results = await anyio.to_thread.run_sync(
+                lambda: orchestrate(
+                    query=query,
+                    domain_filter=arguments.get("search_domain_filter"),
+                    recency=arguments.get("search_recency_filter"),
+                    location=arguments.get("location"),
+                    content_size=arguments.get("content_size"),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — surface as a clean error
+            log.warning("search failed: %s", exc)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"error": f"search failed: {exc}"},
+                        ensure_ascii=False,
+                    ),
+                )
+            ]
+
+        return [TextContent(type="text", text=json.dumps(results, ensure_ascii=False))]
 
     return server
 

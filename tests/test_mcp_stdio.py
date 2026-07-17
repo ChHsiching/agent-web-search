@@ -142,9 +142,15 @@ def test_stdout_is_clean_json_rpc_only(server_env: dict[str, str]) -> None:
     assert parsed >= 2, f"expected >=2 JSON-RPC responses, got {parsed}"
 
 
-def test_tools_call_returns_stub_without_error(
+def test_tools_call_returns_json_shaped_response(
     server_env: dict[str, str]
 ) -> None:
+    """tools/call now runs the real search pipeline (network).
+
+    We only assert the server returns a well-formed JSON-RPC response whose
+    content is valid JSON (a results list or an error object), tolerant of
+    live rate-limiting. Live results aren't guaranteed.
+    """
     proc = _spawn(server_env)
     try:
         _send(proc, INIT)
@@ -158,7 +164,10 @@ def test_tools_call_returns_stub_without_error(
                 "method": "tools/call",
                 "params": {
                     "name": "web_search_prime",
-                    "arguments": {"search_query": "test"},
+                    "arguments": {
+                        "search_query": "rust programming language",
+                        "location": "us",
+                    },
                 },
             },
         )
@@ -166,8 +175,13 @@ def test_tools_call_returns_stub_without_error(
         assert resp["id"] == 3
         assert "error" not in resp, f"no JSON-RPC error: {resp}"
         text = resp["result"]["content"][0]["text"]
-        # Stub returns "[]".
-        assert json.loads(text) == []
+        data = json.loads(text)
+        # Either a results array or an error object.
+        assert isinstance(data, list) or "error" in data, f"valid shape: {data}"
+        if isinstance(data, list) and data:
+            r = data[0]
+            for field in ("title", "url", "summary", "site_name", "favicon"):
+                assert field in r, f"result has {field}"
     finally:
         proc.kill()
-        proc.wait(timeout=5)
+        proc.wait(timeout=10)
