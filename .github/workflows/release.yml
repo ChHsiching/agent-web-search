@@ -62,22 +62,9 @@ jobs:
           tar czf "../agent-web-search-${{ matrix.asset_suffix }}.tar.gz" agent-web-search
 
       - name: Smoke test the built binary
-        run: |
-          # Verify the binary actually starts and responds to MCP initialize.
-          python - <<'PY'
-          import json, subprocess, sys, time
-          exe = "dist/agent-web-search.exe" if sys.platform == "win32" else "dist/agent-web-search"
-          t0 = time.monotonic()
-          p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-          p.stdin.write((json.dumps({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0.1"}}}) + "\n").encode())
-          p.stdin.flush()
-          line = p.stdout.readline()
-          assert line, "no response from binary"
-          r = json.loads(line)
-          assert "agent-web-search" in r["result"]["serverInfo"]["name"], f"bad name: {r}"
-          p.terminate()
-          print(f"smoke test OK: {time.monotonic()-t0:.2f}s startup")
-          PY
+        # Cross-platform: uses a script file rather than a shell heredoc,
+        # which PowerShell (Windows runners) does not support.
+        run: python scripts/smoke_test.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
