@@ -53,9 +53,12 @@ jobs:
         # Publish the bare binary (no archive) so users download one file and
         # run it directly. The PyInstaller output is dist/<bin_name>; rename it
         # to the platform-specific asset name at the repo root for upload.
+        # Ensure the executable bit is set on Unix (PyInstaller sets it, but be
+        # explicit — without +x the binary won't run on macOS/Linux).
         shell: bash
         run: |
           mv "dist/${{ matrix.bin_name }}" "${{ matrix.asset_name }}"
+          chmod +x "${{ matrix.asset_name }}" || true
           ls -la "${{ matrix.asset_name }}"
 
       - name: Smoke test the built binary
