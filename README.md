@@ -1,3 +1,5 @@
+> Languages: **English** · [简体中文](README.zh-CN.md)
+
 # agent-web-search
 
 A **free, unlimited, stable** web-search MCP tool for coding agents (Claude Code, Codex, ZCode). A drop-in replacement for paid/hosted `web_search_prime` — same tool name, same parameters, zero runtime cost.
