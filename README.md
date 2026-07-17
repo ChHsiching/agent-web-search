@@ -16,10 +16,11 @@ The official `web_search_prime` tools are metered and return `429 Weekly/Monthly
    - Windows: `agent-web-search-windows-x64.zip`
    - Linux: `agent-web-search-linux-x64.tar.gz`
    - macOS: `agent-web-search-macos.tar.gz`
-2. Extract and place the binary on your `PATH`.
-3. Configure your agent (below).
+2. Extract the archive — you get a single `agent-web-search` (or `.exe`) binary.
+3. Note its full path, e.g. `C:\Tools\agent-web-search.exe` or `/home/you/bin/agent-web-search`.
+4. Configure your agent using that path (below).
 
-The binary is a PyInstaller bundle — Python interpreter and all dependencies are packed inside, so you do **not** need Python installed.
+The binary is a PyInstaller bundle — the Python interpreter and all dependencies are packed inside, so you do **not** need Python installed. (You may also place the binary on your `PATH` and use just the name `agent-web-search` as the command.)
 
 **Option B — from source (needs Python 3.10+):**
 
@@ -29,28 +30,35 @@ cd agent-web-search
 pip install -e .
 ```
 
-Then run via `agent-web-search` (the installed script) or `python -m agent_web_search`.
+This installs an `agent-web-search` script on your `PATH`. The command below then uses just the name.
 
 ## Configure your agent
 
-Add the server to your agent's MCP config as a stdio server running the binary.
-
-**Claude Code / ZCode (`.claude.json` or equivalent):**
+This is a standard stdio MCP server. Add it to your agent's MCP config — the shape below works for **ZCode, Claude Code, and Codex** (each reads the same `mcpServers` block):
 
 ```json
 {
   "mcpServers": {
     "web-search-prime": {
       "type": "stdio",
-      "command": "agent-web-search"
+      "command": "/absolute/path/to/agent-web-search",
+      "args": []
     }
   }
 }
 ```
 
-**Codex:** add the same stdio entry under your MCP servers config.
+- `command`: the full path to the binary you extracted (Option A), or just `agent-web-search` if it's on your `PATH` (Option B).
+- `args`: empty — the server takes no arguments.
+- `type`: must be `"stdio"`.
 
-Once configured, the agent sees a `web_search_prime` tool with the same parameters as the paid version — your prompts and tool calls work unchanged.
+**Per-agent config file locations** (where to put the block above):
+
+- **ZCode**: your ZCode MCP config (see ZCode docs for the exact file).
+- **Claude Code**: `~/.claude.json` (or the project `.mcp.json`).
+- **Codex**: your Codex MCP servers config.
+
+Once configured, restart the agent. It will see a `web_search_prime` tool with the same parameters as the paid version — your prompts and tool calls work unchanged.
 
 ## How it works
 

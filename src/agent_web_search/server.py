@@ -68,7 +68,14 @@ _TOOL_DESCRIPTION = (
 
 def create_server() -> Server:
     """Build the MCP server with the web_search_prime tool registered."""
-    server = Server("agent-web-search")
+    server = Server(
+        "agent-web-search",
+        version=__version__,
+        instructions=(
+            "A free, unlimited web-search tool. Call web_search_prime "
+            "with a query."
+        ),
+    )
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
