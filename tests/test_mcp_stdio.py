@@ -127,7 +127,9 @@ def test_stdout_is_clean_json_rpc_only(server_env: dict[str, str]) -> None:
         import time
 
         time.sleep(0.3)
-        proc.stdin and proc.stdin.close()
+        # communicate() closes stdin itself; closing it manually first makes
+        # communicate()'s internal stdin.flush() raise "flush of closed file"
+        # on Linux (Windows tolerates it). Don't pre-close.
         out, _ = proc.communicate(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
