@@ -2,10 +2,10 @@
 
 [English](./README.md) | **简体中文**
 
-一个面向 MCP-capable agent（Claude Code、ZCode，以及任何支持 Model Context Protocol 的客户端）的**免费、不限量的网页搜索**。它执行搜索查询，返回带页面正文摘录的结果，agent 可直接阅读 —— 是众多 agent 客户端内置的付费、限流 `web_search_prime` 工具的替代品。
+一个面向 MCP-capable agent（Claude Code、ZCode，以及任何支持 Model Context Protocol 的客户端）的**免费、不限量的网页搜索**。它执行搜索查询，返回带页面正文摘录的结果，agent 可直接阅读 —— 无需 API key，没有配额，没有月度限额。
 
 - **免费且不限量** —— 通过普通 HTTP 搜索 DuckDuckGo。无需 API key，没有配额，没有月度限额，不会遇到 429。
-- **Drop-in 兼容** —— 暴露一个名为 `web_search` 的工具，参数和付费 `web_search_prime` 一致，所以 agent 的提示词无需改动（工具名不同，但 agent 按描述选工具，不按硬编码名字）。
+- **通用 MCP 工具** —— 暴露一个名为 `web_search` 的工具，参数采用 agent 已熟悉的标准 schema（query、domain filter、recency、content size、location），即插即用，无需改提示词。
 - **启动可靠** —— 以单个自包含二进制分发（Python 解释器封装在内）。不用 `npx`，无需安装运行时，启动时不联网。第一次就能连上，每次都能。
 - **近乎零维护** —— 对 DuckDuckGo 的访问通过 `ddgs` 库进行，它替我们处理反爬、限流、重试。没有要跟进的抓取引擎。
 
@@ -118,7 +118,7 @@ web_search({ "search_query": "rust tokio tutorial" })
 
 > **替换路径：** 上面的示例用的是推荐安装位置，`<username>` 是占位符 —— 替换成你的实际用户名（或如果你的客户端支持环境变量展开，用 `%LOCALAPPDATA%`）。如果你把二进制放在别处，相应调整路径。
 
-> **命名：** key（上面的 `chhsich-web-search`）是你在客户端这边给 server 的标签 —— 叫什么都行；它不会和官方 `web-search-prime` 那条冲突，两者可以并存。它暴露的工具名为 `web_search`（刻意与付费的 `web_search_prime` 区分 —— 我们描述功能，不模仿名字）。
+> **命名：** key（上面的 `chhsich-web-search`）是你在客户端这边给 server 的标签 —— 叫什么都行。它暴露的工具名为 `web_search`（我们描述功能，不模仿名字）。
 
 > **路径提示（Windows）：** 用包含 `.exe` 的完整绝对路径。JSON 里用正斜杠即可，能避免反斜杠转义。
 

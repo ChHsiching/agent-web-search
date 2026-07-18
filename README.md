@@ -4,16 +4,14 @@
 
 A **free, uncapped web search** for MCP-capable agents (Claude Code, ZCode, and
 any client that speaks the Model Context Protocol). It runs a search query and
-returns results with page-body extracts the agent can read directly — a
-drop-in replacement for the paid, rate-limited `web_search_prime` tool built
-into many agent clients.
+returns results with page-body extracts the agent can read directly — no API
+key, no quota, no monthly limit.
 
 - **Free and uncapped** — searches DuckDuckGo over plain HTTP. No API key, no
   quota, no monthly limit, no 429s.
-- **Drop-in compatible** — exposes a tool named `web_search` with the same
-  parameters as the paid `web_search_prime`, so your agent's prompts work
-  unchanged (the tool name differs, but agents pick tools by description, not
-  hardcoded name).
+- **Universal MCP tool** — exposes a tool named `web_search` with the standard
+  schema agents already know (query, domain filter, recency, content size,
+  location), so it slots into any MCP client without prompt changes.
 - **Reliable launch** — ships as a single self-contained binary (Python
   interpreter bundled inside). No `npx`, no runtime to install, no network at
   startup. It connects the first time, every time.
@@ -169,10 +167,8 @@ contract — there are no other parameters to set.
 > the binary somewhere else.
 
 > **Naming:** the key (`chhsich-web-search` above) is your client-side label
-> for the server — call it whatever you want; it won't collide with the
-> official `web-search-prime` entry, so both can coexist. The tool it exposes
-> is named `web_search` (intentionally distinct from the paid
-> `web_search_prime` — we describe the function, not mimic the name).
+> for the server — call it whatever you want. The tool it exposes is named
+> `web_search` (we describe the function, not mimic a name).
 
 > **Path tip (Windows):** use the full absolute path including `.exe`.
 > Forward slashes work in JSON and avoid backslash escaping.
