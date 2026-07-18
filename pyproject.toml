@@ -32,3 +32,6 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that hit the real network (skipped in CI by default; run locally with a bare `python -m pytest`)",
+]
