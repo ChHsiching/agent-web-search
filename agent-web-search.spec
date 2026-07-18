@@ -7,7 +7,7 @@
 # Build: pyinstaller agent-web-search.spec --noconfirm
 # Verified working: ddgs search returns results through the bundled exe.
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 
 block_cipher = None
 
@@ -35,6 +35,11 @@ hiddenimports += [
     "sse_starlette",
 ]
 
+# Bundle our own dist-info so importlib.metadata.version() resolves at runtime.
+# __init__.py reads __version__ from package metadata; without this the frozen
+# binary would hit PackageNotFoundError and silently fall back to "0.0.0+dev".
+datas = copy_metadata("agent-web-search")
+
 # Excluded — only things known-safe to drop. (mcp.cli sys.exits on import;
 # the rest are unused heavy stdlib. Do NOT exclude xml/email — pkg_resources
 # and plistlib depend on them.)
@@ -48,7 +53,7 @@ a = Analysis(
     ["src/agent_web_search/__main__.py"],
     pathex=["src"],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],

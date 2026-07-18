@@ -127,7 +127,9 @@ def test_stdout_is_clean_json_rpc_only(server_env: dict[str, str]) -> None:
         import time
 
         time.sleep(0.3)
-        proc.stdin and proc.stdin.close()
+        # communicate() closes stdin itself; closing it manually first makes
+        # communicate()'s internal stdin.flush() raise "flush of closed file"
+        # on Linux (Windows tolerates it). Don't pre-close.
         out, _ = proc.communicate(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
@@ -142,6 +144,7 @@ def test_stdout_is_clean_json_rpc_only(server_env: dict[str, str]) -> None:
     assert parsed >= 2, f"expected >=2 JSON-RPC responses, got {parsed}"
 
 
+@pytest.mark.integration
 def test_tools_call_returns_json_shaped_response(
     server_env: dict[str, str]
 ) -> None:
@@ -150,6 +153,11 @@ def test_tools_call_returns_json_shaped_response(
     We only assert the server returns a well-formed JSON-RPC response whose
     content is valid JSON (a results list or an error object), tolerant of
     live rate-limiting. Live results aren't guaranteed.
+
+    Marked ``integration`` because it hits the live ddgs/DuckDuckGo pipeline
+    and is therefore weather-dependent. CI deselects it (``-m "not
+    integration"``); run it locally with a bare ``python -m pytest`` to
+    exercise the real network path.
     """
     proc = _spawn(server_env)
     try:
