@@ -62,12 +62,28 @@ def main() -> int:
             return 1
 
         resp = json.loads(line)
-        name = resp.get("result", {}).get("serverInfo", {}).get("name", "")
+        server_info = resp.get("result", {}).get("serverInfo", {})
+        name = server_info.get("name", "")
         if "agent-web-search" not in name:
             print(f"FAIL: bad server name: {name}", file=sys.stderr)
             return 1
 
-        print(f"smoke test OK: {time.monotonic() - t0:.2f}s startup, server={name}")
+        # Assert the version propagated. __init__.py reads it from package
+        # metadata via importlib.metadata; the spec bundles that metadata via
+        # copy_metadata(). If either link breaks, the binary silently falls
+        # back to "0.0.0+dev" — catch that here so a broken release never
+        # ships with a garbage version.
+        version = server_info.get("version", "")
+        if not version or version.startswith("0.0.0+dev"):
+            print(
+                f"FAIL: bad/missing server version: {version!r} "
+                "(expected a real release version — the binary likely fell back "
+                "to the dev placeholder, meaning package metadata isn't bundled)",
+                file=sys.stderr,
+            )
+            return 1
+
+        print(f"smoke test OK: {time.monotonic() - t0:.2f}s startup, server={name} v{version}")
         return 0
     finally:
         proc.terminate()
