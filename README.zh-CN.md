@@ -45,7 +45,7 @@ web_search({ "search_query": "rust tokio tutorial" })
 - **不做网页抓取 / reader。** 它做搜索，不抓取任意 URL。抓取页面是另一个工具的事，见 [`agent-web-fetch`](https://github.com/ChHsiching/agent-web-fetch)。
 - **不做摘要 / 翻译。** 它返回页面正文，不加工内容。没有付费模型调用。
 - **不做图片 / 新闻 / 视频搜索。** 只做通用网页结果，覆盖 agent 绝大多数需求。
-- **不暴露 `max_results`。** 结果数量固定为 10 条左右且不对外暴露，与目标工具一致。
+- **不暴露 `max_results`。** 工具请求 10 条结果，上游可能返回更少；数量不对外暴露，与目标工具一致。
 
 ### 已知限制
 
@@ -226,7 +226,7 @@ server 放在 `~/.claude.json` 的 `mcpServers` key 下，Windows 下这个文�
 
 ## 用法
 
-这是对 `rust tokio tutorial` 的一次真实查询输出，约 10 条结果中的第一条。此处 `summary` 是页面正文摘录，为展示做了截断：
+这是对 `rust tokio tutorial` 的一次真实查询输出，返回结果中的第一条。此处 `summary` 是页面正文摘录，为展示做了截断：
 
 ```json
 {

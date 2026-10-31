@@ -65,8 +65,8 @@ not summaries. No model calls, no digests.
   process it. No paid model calls.
 - **No image / news / video search.** Only general web results, which covers
   the vast majority of agent needs.
-- **No `max_results`.** The result count is fixed at about 10 and not exposed,
-  matching the target tool.
+- **No `max_results`.** The tool requests 10 results and upstream may return
+  fewer; the count is not exposed, matching the target tool.
 
 ### Known limitations
 
@@ -312,8 +312,9 @@ If the server never shows up or calls fail, see [Troubleshooting](#troubleshooti
 
 ## Usage
 
-This is real output from a query for `rust tokio tutorial`, the first of about
-ten results. The `summary` is a page-body extract, trimmed here for display:
+This is real output from a query for `rust tokio tutorial`, the top result
+the query returned. The `summary` is a page-body extract, trimmed here for
+display:
 
 ```json
 {
