@@ -192,15 +192,16 @@ def test_unknown_tool_call_gets_a_response_and_server_survives(
 def test_tools_call_returns_json_shaped_response(
     server_env: dict[str, str]
 ) -> None:
-    """tools/call now runs the real search pipeline (network).
+    """tools/call runs the real search pipeline (network) and returns results.
 
-    We only assert the server returns a well-formed JSON-RPC response whose
-    content is valid JSON (a results list or an error object), tolerant of
-    live rate-limiting. Live results aren't guaranteed.
+    A pass must mean real results came back: a non-empty list where every
+    entry carries title/url/summary/site_name/favicon. The only accepted
+    alternative is an upstream failure (rate limit, network weather), which
+    skips with the reason shown — an error never counts as green.
 
     Marked ``integration`` because it hits the live ddgs/DuckDuckGo pipeline
     and is therefore weather-dependent. CI deselects it (``-m "not
-    integration"``); run it locally with a bare ``python -m pytest`` to
+    integration"``); run it locally with a bare `python -m pytest` to
     exercise the real network path.
     """
     proc = _spawn(server_env)
@@ -228,12 +229,14 @@ def test_tools_call_returns_json_shaped_response(
         assert "error" not in resp, f"no JSON-RPC error: {resp}"
         text = resp["result"]["content"][0]["text"]
         data = json.loads(text)
-        # Either a results array or an error object.
-        assert isinstance(data, list) or "error" in data, f"valid shape: {data}"
-        if isinstance(data, list) and data:
-            r = data[0]
+        if isinstance(data, dict) and "error" in data:
+            # Upstream weather (rate limit, network). Report honestly as a
+            # skip: an error response must never count as a green run.
+            pytest.skip(f"upstream returned no results: {data['error']}")
+        assert isinstance(data, list) and data, f"expected results, got: {data}"
+        for r in data:
             for field in ("title", "url", "summary", "site_name", "favicon"):
-                assert field in r, f"result has {field}"
+                assert field in r, f"result missing {field}: {r}"
     finally:
         proc.kill()
         proc.wait(timeout=10)
