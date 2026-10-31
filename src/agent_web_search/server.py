@@ -125,7 +125,7 @@ async def _call_tool(
                 content_size=arguments.get("content_size"),
             )
         )
-    except Exception as exc:  # noqa: BLE001 — surface as a clean error
+    except Exception as exc:
         log.warning("search failed: %s", exc)
         return CallToolResult(
             content=[
@@ -137,6 +137,7 @@ async def _call_tool(
                     ),
                 )
             ],
+            is_error=True,
         )
 
     return CallToolResult(

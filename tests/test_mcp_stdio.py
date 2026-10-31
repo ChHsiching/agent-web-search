@@ -78,8 +78,6 @@ def test_initialize_handshake_responds(server_env: dict[str, str]) -> None:
         assert resp["id"] == 1
         name = resp["result"]["serverInfo"]["name"]
         assert "agent-web-search" in name, f"server name: {name}"
-        # The version on the wire must match the package version — pyproject
-        # is the single source, so a mismatch means the link broke somewhere.
         version = resp["result"]["serverInfo"]["version"]
         assert version == __version__, f"server version: {version!r} != {__version__!r}"
         assert resp["result"]["capabilities"]["tools"] is not None
@@ -154,12 +152,7 @@ def test_unknown_tool_call_gets_a_response_and_server_survives(
     server_env: dict[str, str],
 ) -> None:
     """ADR-0004 discipline #3: a bad request degrades to a readable
-    response, never a crash.
-
-    Calls an unregistered tool name, asserts a well-formed JSON-RPC
-    response comes back (either a result or an error object), then asserts
-    the server is still alive by issuing another request afterwards.
-    """
+    response, never a crash."""
     proc = _spawn(server_env)
     try:
         _send(proc, INIT)
@@ -178,7 +171,6 @@ def test_unknown_tool_call_gets_a_response_and_server_survives(
         assert resp["id"] == 3
         assert "result" in resp or "error" in resp, f"well-formed response: {resp}"
 
-        # Still alive: tools/list must answer afterwards.
         _send(proc, TOOLS_LIST)
         resp2 = _read(proc)
         assert resp2["id"] == 2
@@ -192,18 +184,7 @@ def test_unknown_tool_call_gets_a_response_and_server_survives(
 def test_tools_call_returns_json_shaped_response(
     server_env: dict[str, str]
 ) -> None:
-    """tools/call runs the real search pipeline (network) and returns results.
-
-    A pass must mean real results came back: a non-empty list where every
-    entry carries title/url/summary/site_name/favicon. The only accepted
-    alternative is an upstream failure (rate limit, network weather), which
-    skips with the reason shown — an error never counts as green.
-
-    Marked ``integration`` because it hits the live ddgs/DuckDuckGo pipeline
-    and is therefore weather-dependent. CI deselects it (``-m "not
-    integration"``); run it locally with a bare `python -m pytest` to
-    exercise the real network path.
-    """
+    """tools/call runs the real search pipeline (network) and returns results."""
     proc = _spawn(server_env)
     try:
         _send(proc, INIT)
@@ -230,8 +211,6 @@ def test_tools_call_returns_json_shaped_response(
         text = resp["result"]["content"][0]["text"]
         data = json.loads(text)
         if isinstance(data, dict) and "error" in data:
-            # Upstream weather (rate limit, network). Report honestly as a
-            # skip: an error response must never count as a green run.
             pytest.skip(f"upstream returned no results: {data['error']}")
         assert isinstance(data, list) and data, f"expected results, got: {data}"
         for r in data:
