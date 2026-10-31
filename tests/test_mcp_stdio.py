@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from agent_web_search import __version__
+
 # Locate the project root so we can run the server module from source.
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -76,6 +78,10 @@ def test_initialize_handshake_responds(server_env: dict[str, str]) -> None:
         assert resp["id"] == 1
         name = resp["result"]["serverInfo"]["name"]
         assert "agent-web-search" in name, f"server name: {name}"
+        # The version on the wire must match the package version — pyproject
+        # is the single source, so a mismatch means the link broke somewhere.
+        version = resp["result"]["serverInfo"]["version"]
+        assert version == __version__, f"server version: {version!r} != {__version__!r}"
         assert resp["result"]["capabilities"]["tools"] is not None
     finally:
         proc.kill()
@@ -142,6 +148,44 @@ def test_stdout_is_clean_json_rpc_only(server_env: dict[str, str]) -> None:
         json.loads(line)  # raises if stdout pollution
         parsed += 1
     assert parsed >= 2, f"expected >=2 JSON-RPC responses, got {parsed}"
+
+
+def test_unknown_tool_call_gets_a_response_and_server_survives(
+    server_env: dict[str, str],
+) -> None:
+    """ADR-0004 discipline #3: a bad request degrades to a readable
+    response, never a crash.
+
+    Calls an unregistered tool name, asserts a well-formed JSON-RPC
+    response comes back (either a result or an error object), then asserts
+    the server is still alive by issuing another request afterwards.
+    """
+    proc = _spawn(server_env)
+    try:
+        _send(proc, INIT)
+        _read(proc)
+        _send(proc, INITIALIZED)
+        _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "no_such_tool", "arguments": {}},
+            },
+        )
+        resp = _read(proc)
+        assert resp["id"] == 3
+        assert "result" in resp or "error" in resp, f"well-formed response: {resp}"
+
+        # Still alive: tools/list must answer afterwards.
+        _send(proc, TOOLS_LIST)
+        resp2 = _read(proc)
+        assert resp2["id"] == 2
+        assert resp2["result"]["tools"][0]["name"] == "web_search"
+    finally:
+        proc.kill()
+        proc.wait(timeout=5)
 
 
 @pytest.mark.integration

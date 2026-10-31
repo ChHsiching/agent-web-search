@@ -11,8 +11,16 @@ import logging
 from typing import Any
 
 from mcp.server import Server
+from mcp.server.context import ServerRequestContext
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 
 from . import __version__
 
@@ -75,54 +83,52 @@ _TOOL_DESCRIPTION = (
 )
 
 
-def create_server() -> Server:
-    """Build the MCP server with the web_search tool registered."""
-    server = Server(
-        "agent-web-search",
-        version=__version__,
-        instructions=(
-            "A free, unlimited web-search tool. Call web_search with a query."
-        ),
-    )
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+async def _list_tools(
+    context: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListToolsResult:
+    return ListToolsResult(
+        tools=[
             Tool(
                 name="web_search",
                 description=_TOOL_DESCRIPTION,
                 inputSchema=_TOOL_SCHEMA,
             )
         ]
+    )
 
-    @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict[str, Any]
-    ) -> list[TextContent]:
-        if name != "web_search":
-            return [TextContent(type="text", text=f"unknown tool: {name}")]
 
-        import anyio
-        import json
+async def _call_tool(
+    context: ServerRequestContext, params: CallToolRequestParams
+) -> CallToolResult:
+    if params.name != "web_search":
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"unknown tool: {params.name}")],
+            is_error=True,
+        )
 
-        from .orchestrate import orchestrate
+    import anyio
+    import json
 
-        query = arguments.get("search_query", "")
-        log.info("web_search call: query=%r", query)
+    from .orchestrate import orchestrate
 
-        try:
-            results = await anyio.to_thread.run_sync(
-                lambda: orchestrate(
-                    query=query,
-                    domain_filter=arguments.get("search_domain_filter"),
-                    recency=arguments.get("search_recency_filter"),
-                    location=arguments.get("location"),
-                    content_size=arguments.get("content_size"),
-                )
+    arguments = params.arguments or {}
+    query = arguments.get("search_query", "")
+    log.info("web_search call: query=%r", query)
+
+    try:
+        results = await anyio.to_thread.run_sync(
+            lambda: orchestrate(
+                query=query,
+                domain_filter=arguments.get("search_domain_filter"),
+                recency=arguments.get("search_recency_filter"),
+                location=arguments.get("location"),
+                content_size=arguments.get("content_size"),
             )
-        except Exception as exc:  # noqa: BLE001 — surface as a clean error
-            log.warning("search failed: %s", exc)
-            return [
+        )
+    except Exception as exc:  # noqa: BLE001 — surface as a clean error
+        log.warning("search failed: %s", exc)
+        return CallToolResult(
+            content=[
                 TextContent(
                     type="text",
                     text=json.dumps(
@@ -130,11 +136,27 @@ def create_server() -> Server:
                         ensure_ascii=False,
                     ),
                 )
-            ]
+            ],
+        )
 
-        return [TextContent(type="text", text=json.dumps(results, ensure_ascii=False))]
+    return CallToolResult(
+        content=[
+            TextContent(type="text", text=json.dumps(results, ensure_ascii=False))
+        ]
+    )
 
-    return server
+
+def create_server() -> Server:
+    """Build the MCP server with the web_search tool registered."""
+    return Server(
+        "agent-web-search",
+        version=__version__,
+        instructions=(
+            "A free, unlimited web-search tool. Call web_search with a query."
+        ),
+        on_list_tools=_list_tools,
+        on_call_tool=_call_tool,
+    )
 
 
 async def serve() -> None:
