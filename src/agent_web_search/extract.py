@@ -53,7 +53,7 @@ def extract(html_text: str, word_limit: int) -> str:
     try:
         doc = Document(html_text)
         summary_html = doc.summary(html_partial=True)
-    except Exception as exc:  # noqa: BLE001 — readability can be finicky
+    except Exception as exc:
         log.debug("readability extraction failed: %s", exc)
         return ""
 
@@ -68,7 +68,7 @@ def _html_to_text(html_fragment: str) -> str:
     try:
         tree = lxml_html.fromstring(html_fragment)
         text = tree.text_content()
-    except Exception:  # noqa: BLE001 — fall back to regex stripping
+    except Exception:
         text = re.sub(r"<[^>]+>", " ", html_fragment)
     # Collapse whitespace.
     return re.sub(r"\s+", " ", text).strip()

@@ -155,7 +155,7 @@ def _fetch_and_extract(
         return None
     try:
         html = fetcher(url)
-    except Exception as exc:  # noqa: BLE001 — any fetch error degrades to None
+    except Exception as exc:
         log.debug("page fetch failed for %s: %s", url, exc)
         return None
     text = extract(html, word_limit)

@@ -28,7 +28,7 @@ def main() -> None:
         run()
     except KeyboardInterrupt:
         pass
-    except Exception as exc:  # noqa: BLE001 — top-level guard
+    except Exception as exc:
         logging.getLogger("agent_web_search").exception("server exited: %s", exc)
         sys.exit(1)
 
