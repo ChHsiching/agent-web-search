@@ -1,7 +1,7 @@
 # agent-web-search
 
-[![GitHub release](https://img.shields.io/github/v/tag/ChHsiching/agent-web-search?include_prereleases&sort=semver)](https://github.com/ChHsiching/agent-web-search/releases/latest)
-[![License](https://img.shields.io/github/license/ChHsiching/agent-web-search)](https://github.com/ChHsiching/agent-web-search/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/ChHsiching/agent-web-search?label=version&color=blue)](https://github.com/ChHsiching/agent-web-search/releases/latest)
+[![License: AGPL-3.0](https://img.shields.io/github/license/ChHsiching/agent-web-search?color=blue)](https://github.com/ChHsiching/agent-web-search/blob/main/LICENSE)
 
 [English](./README.md) | **简体中文**
 
